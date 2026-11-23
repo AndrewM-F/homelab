@@ -36,6 +36,11 @@ export interface Machine {
   addresses?: Addresses
   /** Public URL for this machine's own UI; makes the card a link. */
   url?: string
+  /**
+   * Fallback disk measurement for a guest that cannot run the agent, read over
+   * SSH with a key pinned to `df -B1 <path>`.
+   */
+  diskProbe?: { ssh: string; path?: string }
   tags?: string[]
 }
 

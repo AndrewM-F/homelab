@@ -158,6 +158,32 @@ ssh root@<hypervisor> systemctl enable --now homelab-collector
 It answers `GET /stats` (resource sample + probes), `GET /health`, and
 `GET /connect/<slug>` for non-HTTP services.
 
+#### Where disk numbers come from
+
+Proxmox reports usage for containers but only *provisioned size* for VMs, so the
+collector tries three sources and records which one it used (`diskSource`):
+
+| Guest | Source |
+| --- | --- |
+| container | `pvesh` rootfs usage |
+| VM | QEMU guest agent filesystem table, root mount preferred (cached 60s) |
+| appliance that cannot run the agent | `df` over SSH, from `machine.diskProbe` |
+
+The SSH fallback is deliberately narrow. The collector's key is pinned
+server-side to a single read-only command, so it can measure and nothing else:
+
+```
+# /root/.ssh/authorized_keys on the guest
+restrict,command="df -B1 /DATA" ssh-ed25519 AAAA… homelab-collector@<hypervisor>
+
+# inventory.local.json
+{ "id": "nas", "vmid": 101, "diskProbe": { "ssh": "user@10.0.0.21", "path": "/DATA" } }
+```
+
+`restrict` disables PTYs, agent forwarding and port forwarding, and the forced
+command overrides whatever the client asks for. If no source answers, the card
+falls back to showing provisioned size and says so.
+
 ### 4. Worker
 
 ```bash

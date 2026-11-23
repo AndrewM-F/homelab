@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/solid-router'
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
-import { LockIcon, RefreshIcon, SearchIcon } from '../components/icons'
+import { CubeIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon } from '../components/icons'
 import { MachineCard } from '../components/machine-card'
 import { ServiceCard } from '../components/service-card'
 import { clock, percent } from '../lib/format'
@@ -221,7 +221,10 @@ function Dashboard() {
       <main>
         <section class="section">
           <div class="section-head">
-            <h2>Machines</h2>
+            <h2>
+              <ServerIcon />
+              Machines
+            </h2>
             <span class="section-meta">
               {computers().length} of {inventory().machines.filter((m) => kindOf(m) !== 'lxc').length}
             </span>
@@ -234,7 +237,10 @@ function Dashboard() {
         <Show when={inventory().machines.some((m) => kindOf(m) === 'lxc')}>
           <section class="section">
             <div class="section-head">
-              <h2>Containers</h2>
+              <h2>
+                <CubeIcon />
+                Containers
+              </h2>
               <span class="section-meta">
                 {containers().length} of {inventory().machines.filter((m) => kindOf(m) === 'lxc').length} · lxc
               </span>
@@ -247,7 +253,10 @@ function Dashboard() {
 
         <section class="section">
           <div class="section-head">
-            <h2>Services</h2>
+            <h2>
+              <GridIcon />
+              Services
+            </h2>
             <span class="section-meta">each on its own subdomain</span>
           </div>
 

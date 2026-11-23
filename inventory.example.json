@@ -31,6 +31,10 @@
       "addresses": {
         "tailnet": "100.64.0.21",
         "lan": "10.0.0.21"
+      },
+      "diskProbe": {
+        "ssh": "user@10.0.0.21",
+        "path": "/DATA"
       }
     },
     {

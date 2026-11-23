@@ -58,6 +58,37 @@ export function TerminalIcon(props: { size?: number }): JSX.Element {
   )
 }
 
+export function ServerIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 13}px`, height: `${props.size ?? 13}px` }}>
+      <rect x="2.5" y="2.5" width="11" height="4.5" rx="1.2" />
+      <rect x="2.5" y="9" width="11" height="4.5" rx="1.2" />
+      <path d="M5 4.75h.01M5 11.25h.01" />
+    </svg>
+  )
+}
+
+export function CubeIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 13}px`, height: `${props.size ?? 13}px` }}>
+      <path d="M8 2.2 13.4 5v6L8 13.8 2.6 11V5z" />
+      <path d="M2.6 5 8 7.8 13.4 5" />
+      <path d="M8 7.8v6" />
+    </svg>
+  )
+}
+
+export function GridIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 13}px`, height: `${props.size ?? 13}px` }}>
+      <rect x="2.5" y="2.5" width="4.6" height="4.6" rx="1" />
+      <rect x="8.9" y="2.5" width="4.6" height="4.6" rx="1" />
+      <rect x="2.5" y="8.9" width="4.6" height="4.6" rx="1" />
+      <rect x="8.9" y="8.9" width="4.6" height="4.6" rx="1" />
+    </svg>
+  )
+}
+
 export function CopyIcon(props: { size?: number }): JSX.Element {
   return (
     <svg {...base} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>

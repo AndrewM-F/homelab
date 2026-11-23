@@ -53,6 +53,15 @@ function parseUrl(value: unknown, path: string): string | undefined {
   }
 }
 
+function parseDiskProbe(value: unknown, path: string): Machine['diskProbe'] {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'object') fail(path, 'an object', value)
+  const raw = value as Record<string, unknown>
+  const ssh = asString(raw.ssh, `${path}.ssh`)!
+  if (!/^[a-z_][a-z0-9_-]*@[a-z0-9.-]+$/i.test(ssh)) fail(`${path}.ssh`, 'user@host', ssh)
+  return { ssh, path: asString(raw.path, `${path}.path`, true) }
+}
+
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 const RESERVED = new Set(['www', 'api', 'metrics', 'admin', 'mail', 'ftp', 'ns1', 'ns2'])
 
@@ -78,6 +87,7 @@ function parseMachine(raw: unknown, index: number): Machine {
     icon: asString(m.icon, `${path}.icon`, true),
     addresses: parseAddresses(m.addresses, `${path}.addresses`),
     url: parseUrl(m.url, `${path}.url`),
+    diskProbe: parseDiskProbe(m.diskProbe, `${path}.diskProbe`),
     tags: asStringArray(m.tags, `${path}.tags`),
   }
 }

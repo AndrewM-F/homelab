@@ -48,8 +48,13 @@ AGENT_TIMEOUT = 6.0
 # Filesystem usage moves slowly and the agent call is not free, so it is cached
 # far longer than the resource sample itself.
 AGENT_TTL = 60.0
+SSH_TIMEOUT = 6.0
+# Key whose authorized_keys entry is pinned to a single read-only command, for
+# appliances that cannot run the guest agent (see README).
+SSH_IDENTITY = "/etc/homelab-collector/ssh_probe"
 
 _agent_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
+_ssh_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
 
 # ---------------------------------------------------------------- sampling
 
@@ -206,7 +211,61 @@ def agent_disk(vmid: int, node: str) -> tuple[int, int, str] | None:
     return found
 
 
-def guest_stats(warnings: list[str]) -> list[dict]:
+def ssh_disk(vmid: int, probe: dict) -> tuple[int, int, str] | None:
+    """
+    Filesystem usage for a guest that cannot run the agent, read over SSH.
+
+    The remote key is restricted server-side to one command (`df -B1 <path>`),
+    so this cannot do anything else even if the collector is compromised.
+    """
+    now = time.time()
+    cached = _ssh_cache.get(vmid)
+    if cached and now - cached[0] < AGENT_TTL:
+        return cached[1]
+
+    found: tuple[int, int, str] | None = None
+    target = probe.get("ssh")
+    path = probe.get("path") or "/"
+    if target:
+        try:
+            out = subprocess.run(
+                [
+                    "ssh",
+                    "-i",
+                    SSH_IDENTITY,
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    "-o",
+                    f"ConnectTimeout={int(SSH_TIMEOUT)}",
+                    target,
+                    "df",
+                    "-B1",
+                    path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=SSH_TIMEOUT + 4,
+                check=False,
+            )
+            if out.returncode == 0:
+                rows = [line for line in out.stdout.splitlines() if line.strip()]
+                if len(rows) >= 2:
+                    fields = rows[-1].split()
+                    if len(fields) >= 3:
+                        total = int(fields[1])
+                        used = int(fields[2])
+                        if total > 0:
+                            found = (used, total, path)
+        except Exception:  # noqa: BLE001 - an unreachable probe is not fatal
+            found = None
+
+    _ssh_cache[vmid] = (now, found)
+    return found
+
+
+def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]:
     """Live CPU/memory/disk for every VM and container, from the cluster API."""
     pvesh = shutil.which("pvesh")
     if not pvesh:
@@ -248,9 +307,12 @@ def guest_stats(warnings: list[str]) -> list[dict]:
         source = "guest" if used > 0 else "allocated"
 
         if kind == "qemu" and item.get("status") == "running":
-            agent = agent_disk(vmid, item.get("node") or os.uname().nodename)
-            if agent:
-                used, total, _mount = agent
+            node = item.get("node") or os.uname().nodename
+            measured = agent_disk(vmid, node)
+            if not measured and vmid in disk_probes:
+                measured = ssh_disk(vmid, disk_probes[vmid])
+            if measured:
+                used, total, _mount = measured
                 source = "guest"
 
         guests.append(
@@ -330,6 +392,9 @@ class State:
         self.connect = {item["slug"]: item for item in config.get("connect") or [] if item.get("slug")}
         # Served at "/" so a bare hostname opens something useful.
         self.root_connect = config.get("root_connect")
+        self.disk_probes = {
+            int(item["vmid"]): item for item in config.get("disk_probes") or [] if item.get("vmid") is not None
+        }
         self.executor = ThreadPoolExecutor(max_workers=12)
 
     def snapshot(self) -> dict:
@@ -338,7 +403,7 @@ class State:
         return {
             "ts": int(time.time()),
             "host": host_stats(self.interface),
-            "guests": guest_stats(warnings),
+            "guests": guest_stats(warnings, self.disk_probes),
             "probes": probes,
             "disks": disk_stats(self.disks),
             "warnings": warnings,

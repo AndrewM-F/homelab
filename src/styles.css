@@ -334,12 +334,19 @@ kbd {
 }
 
 .section-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--fg);
+}
+
+.section-head h2 svg {
+  color: var(--dim);
 }
 
 .section-meta {
@@ -466,14 +473,15 @@ a.machine:hover h3 {
 }
 
 .machine-id {
-  padding: 1px 6px;
-  border: 1px solid rgba(94, 234, 212, 0.4);
-  border-radius: 4px;
+  padding: 0 4px;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  border-radius: 3px;
   background: var(--accent-soft);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
   color: var(--accent);
   text-transform: uppercase;
 }
@@ -755,7 +763,11 @@ a.machine:hover h3 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--muted);
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--dim);
 }
 
 /* ---------- cards, menus and the service library ---------- */
