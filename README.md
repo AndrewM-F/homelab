@@ -226,6 +226,20 @@ Everything in that list is git-ignored, and `scripts/sync.ts` regenerates the
 derivable parts. The example inventory uses `10.0.0.x` placeholders so a fresh
 clone renders without leaking anything.
 
+### Apps that reject `X-Forwarded-For`
+
+SABnzbd answers `403 External internet access denied` to any request carrying a
+public `X-Forwarded-For`. Cloudflare adds that header and cloudflared rewrites it
+when connecting to the origin, so a Transform Rule on the zone cannot remove it —
+verified by pointing a hostname at a header-dumping listener: the header still
+arrived after a `remove` rule in `http_request_late_transform`. SABnzbd's
+`host_whitelist` no longer overrides the check either.
+
+`tunnel/sabnzbd-header-strip.nginx.conf` sits in the tunnel container and proxies
+the hostname to the app with the header stripped, which is the first hop that is
+downstream of both. Anything else that refuses proxied traffic can be added the
+same way.
+
 ## Notes
 
 ### Edge-injected nodes and hydration
