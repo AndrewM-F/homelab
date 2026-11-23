@@ -70,7 +70,10 @@ const ingress: IngressEntry[] = tunnelServices.map((service) => {
 
 // Hosts served by the collector rather than an inventory service: the connect
 // page for non-HTTP machines, and the stats endpoint the dashboard proxies.
-const collectorOrigin = process.env.COLLECTOR_URL ?? 'http://127.0.0.1:9101'
+const collectorOrigin = process.env.COLLECTOR_URL
+if (!collectorOrigin) {
+  die('set COLLECTOR_URL (the collector host as the tunnel connector sees it) before applying')
+}
 const connectService = inventory.services.find((service) => service.connect)
 if (connectService) {
   ingress.push({

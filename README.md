@@ -115,8 +115,11 @@ connection page (useful for RDP, SSH, VNC where a browser cannot help).
 
 ```bash
 bun run tunnel plan
-bun run tunnel apply --tunnel <tunnel-id>
+COLLECTOR_URL=http://<hypervisor>:9101 bun run tunnel apply --tunnel <tunnel-id>
 ```
+
+`COLLECTOR_URL` is required for `apply`: the connector host must know how to
+reach the collector, and that address is deliberately not hard-coded.
 
 `plan` prints the ingress table. `apply` pushes it to the tunnel and reconciles
 one proxied CNAME per hostname. Re-running is safe.
