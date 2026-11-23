@@ -1,5 +1,4 @@
 {
-  "$schema": "./inventory.schema.json",
   "site": {
     "title": "homelab",
     "subtitle": "operations",
@@ -10,42 +9,54 @@
       "id": "hypervisor",
       "name": "hv-01",
       "role": "hypervisor",
-      "tags": ["proxmox"]
+      "tags": [
+        "proxmox"
+      ]
     },
     {
       "id": "nas",
       "name": "nas",
       "role": "storage + media",
       "vmid": 101,
-      "tags": ["docker"]
+      "tags": [
+        "docker"
+      ]
     },
     {
       "id": "desktop",
       "name": "desktop",
       "role": "workstation",
       "vmid": 102,
-      "tags": ["linux"]
+      "tags": [
+        "linux"
+      ]
     },
     {
       "id": "windows",
       "name": "windows",
       "role": "desktop",
       "vmid": 103,
-      "tags": ["windows"]
+      "tags": [
+        "windows"
+      ]
     },
     {
       "id": "dns",
       "name": "dns",
       "role": "dns + adblock",
       "vmid": 110,
-      "tags": ["lxc"]
+      "tags": [
+        "lxc"
+      ]
     },
     {
       "id": "status",
       "name": "status",
       "role": "uptime monitor",
       "vmid": 111,
-      "tags": ["lxc"]
+      "tags": [
+        "lxc"
+      ]
     }
   ],
   "services": [
@@ -57,7 +68,9 @@
       "machine": "nas",
       "origin": "http://10.0.0.21:8096",
       "probeUrl": "http://10.0.0.21:8096/System/Info/Public",
-      "tags": ["streaming"]
+      "tags": [
+        "streaming"
+      ]
     },
     {
       "slug": "requests",
@@ -67,7 +80,9 @@
       "machine": "nas",
       "origin": "http://10.0.0.21:5055",
       "probeUrl": "http://10.0.0.21:5055/api/v1/status",
-      "tags": ["acquisition"]
+      "tags": [
+        "acquisition"
+      ]
     },
     {
       "slug": "movies",
@@ -77,7 +92,9 @@
       "machine": "nas",
       "origin": "http://10.0.0.21:7878",
       "probeUrl": "http://10.0.0.21:7878/ping",
-      "tags": ["automation"]
+      "tags": [
+        "automation"
+      ]
     },
     {
       "slug": "series",
@@ -87,7 +104,9 @@
       "machine": "nas",
       "origin": "http://10.0.0.21:8989",
       "probeUrl": "http://10.0.0.21:8989/ping",
-      "tags": ["automation"]
+      "tags": [
+        "automation"
+      ]
     },
     {
       "slug": "dns",
@@ -98,7 +117,9 @@
       "origin": "http://10.0.0.30",
       "path": "/admin/",
       "probeUrl": "http://10.0.0.30/admin/",
-      "tags": ["dns"]
+      "tags": [
+        "dns"
+      ]
     },
     {
       "slug": "status",
@@ -108,7 +129,9 @@
       "machine": "status",
       "origin": "http://10.0.0.31:3001",
       "probeUrl": "http://10.0.0.31:3001/",
-      "tags": ["monitoring"]
+      "tags": [
+        "monitoring"
+      ]
     },
     {
       "slug": "hypervisor",
@@ -118,7 +141,9 @@
       "machine": "hypervisor",
       "origin": "https://10.0.0.10:8006",
       "originTLS": "skip",
-      "tags": ["proxmox"]
+      "tags": [
+        "proxmox"
+      ]
     },
     {
       "slug": "workstation",
