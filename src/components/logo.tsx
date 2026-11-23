@@ -6,7 +6,7 @@ interface Props {
   icon?: string
   /** Name used for the accessible label and the monogram fallback. */
   name: string
-  size?: 'md' | 'lg'
+  size?: 'md' | 'lg' | 'rail'
 }
 
 /** A square logo tile; falls back to a monogram when no mark exists. */

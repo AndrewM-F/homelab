@@ -466,12 +466,16 @@ a.machine:hover h3 {
 }
 
 .machine-id {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--dim);
-  padding: 1px 5px;
-  border: 1px solid var(--line-strong);
+  padding: 1px 6px;
+  border: 1px solid rgba(94, 234, 212, 0.4);
   border-radius: 4px;
+  background: var(--accent-soft);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-transform: uppercase;
 }
 
 .machine-role {
@@ -513,6 +517,26 @@ a.machine:hover h3 {
 .logo-lg img {
   width: 33px;
   height: 33px;
+}
+
+/* Full-height left rail on service cards; the tile *is* the column. */
+.logo-rail {
+  width: 98px;
+  height: auto;
+  align-self: stretch;
+  border: none;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.logo-rail img {
+  width: 54px;
+  height: 54px;
+}
+
+.logo-rail .logo-mono {
+  font-size: 28px;
 }
 
 .logo-mono {
@@ -745,11 +769,17 @@ a.machine:hover h3 {
   opacity: 0.55;
 }
 
+/* An open menu must paint above neighbouring cards, which come later in
+   document order and would otherwise cover it. */
+.card:has(.menu) {
+  z-index: 50;
+}
+
 .card-menu {
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 6;
+  z-index: 20;
 }
 
 .menu-trigger {
@@ -776,9 +806,9 @@ a.machine:hover h3 {
   position: absolute;
   top: 32px;
   right: 0;
-  z-index: 30;
-  min-width: 244px;
-  max-width: 320px;
+  z-index: 60;
+  min-width: 272px;
+  max-width: 368px;
   padding: 5px;
   background: #0e1317;
   border: 1px solid var(--line-strong);
@@ -787,10 +817,10 @@ a.machine:hover h3 {
 }
 
 .menu-item {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   padding: 7px 9px;
   border-radius: 6px;
@@ -800,6 +830,10 @@ a.machine:hover h3 {
   transition: background 120ms ease, color 120ms ease;
 }
 
+.menu-item.is-copy {
+  cursor: copy;
+}
+
 .menu-item:hover,
 .menu-item:focus-visible {
   background: rgba(255, 255, 255, 0.06);
@@ -807,14 +841,7 @@ a.machine:hover h3 {
 }
 
 .menu-item-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   white-space: nowrap;
-}
-
-.menu-item-label svg {
-  color: var(--accent);
 }
 
 .menu-item-value {
@@ -824,6 +851,20 @@ a.machine:hover h3 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: right;
+}
+
+.menu-item-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  color: var(--dim);
+  transition: color 120ms ease;
+}
+
+.menu-item:hover .menu-item-icon,
+.menu-item:focus-visible .menu-item-icon {
+  color: var(--accent);
 }
 
 .service-grid {
@@ -834,13 +875,15 @@ a.machine:hover h3 {
 
 .service {
   display: flex;
-  flex-direction: column;
-  gap: 13px;
+  align-items: stretch;
+  gap: 0;
   height: 100%;
-  padding: 16px 16px 13px;
+  min-height: 116px;
+  padding: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
+  overflow: hidden;
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
@@ -858,23 +901,23 @@ a.service:hover h3 {
   cursor: default;
 }
 
-.service-head {
+.service-body {
   display: flex;
-  align-items: flex-start;
-  gap: 13px;
-  padding-right: 26px;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 13px 14px 11px;
 }
 
-.service-title {
+.service-head {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  flex: 1;
-  min-width: 0;
-  padding-top: 2px;
+  padding-right: 22px;
 }
 
-.service-title h3 {
+.service-head h3 {
   font-size: 16px;
   font-weight: 570;
   letter-spacing: -0.01em;
@@ -899,7 +942,6 @@ a.service:hover h3 {
   justify-content: space-between;
   gap: 10px;
   margin-top: auto;
-  padding-left: calc(var(--logo-lg) + 13px);
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--dim);

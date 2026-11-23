@@ -52,10 +52,10 @@ export function MachineCard(props: Props): JSX.Element {
     const items: MenuItem[] = []
     if (props.machine.url) items.push({ label: 'Open', href: props.machine.url })
     if (props.machine.addresses?.tailnet) {
-      items.push({ label: 'Copy tailnet', value: props.machine.addresses.tailnet })
+      items.push({ label: 'Tailnet', value: props.machine.addresses.tailnet })
     }
     if (props.machine.addresses?.lan) {
-      items.push({ label: 'Copy LAN', value: props.machine.addresses.lan })
+      items.push({ label: 'LAN', value: props.machine.addresses.lan })
     }
     items.push({
       label: resourceView() === 'gauge' ? 'Show bar meters' : 'Show gauges',

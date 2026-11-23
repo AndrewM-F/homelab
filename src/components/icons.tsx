@@ -58,6 +58,15 @@ export function TerminalIcon(props: { size?: number }): JSX.Element {
   )
 }
 
+export function CopyIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>
+      <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+      <path d="M10.5 5.5v-1a1.5 1.5 0 0 0-1.5-1.5H3.5A1.5 1.5 0 0 0 2 4.5v5.5A1.5 1.5 0 0 0 3.5 11.5h1" />
+    </svg>
+  )
+}
+
 export function MoreIcon(props: { size?: number }): JSX.Element {
   return (
     <svg {...base} style={{ width: `${props.size ?? 14}px`, height: `${props.size ?? 14}px` }}>

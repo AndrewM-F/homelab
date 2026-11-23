@@ -1,16 +1,23 @@
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from 'solid-js'
-import { CheckIcon, MoreIcon } from './icons'
+import { ArrowOut, CheckIcon, CopyIcon, MoreIcon } from './icons'
 
 export interface MenuItem {
+  /** Left-hand name, e.g. "Tailnet". */
   label: string
   /** Monospace value shown beside the label. */
   value?: string
   /** Clipboard payload; defaults to `value`. */
   copy?: string
-  /** Setting this makes the item open a URL instead of copying. */
+  /** Setting this makes the item open a URL. */
   href?: string
-  /** Setting this makes the item run a command instead of copying. */
+  /** Setting this makes the item run a command. */
   onSelect?: () => void
+}
+
+interface Props {
+  items: MenuItem[]
+  /** Accessible name, e.g. "Jellyfin options". */
+  label: string
 }
 
 /**
@@ -56,12 +63,6 @@ async function copyText(value: string): Promise<boolean> {
   }
 }
 
-interface Props {
-  items: MenuItem[]
-  /** Accessible name, e.g. "Jellyfin options". */
-  label: string
-}
-
 /**
  * Per-card overflow menu. Copy actions stay open and confirm in place, so
  * grabbing both addresses is two clicks rather than two round trips.
@@ -97,6 +98,8 @@ export function CardMenu(props: Props): JSX.Element {
     })
   })
 
+  const isCopy = (item: MenuItem) => Boolean(item.copy ?? item.value)
+
   const activate = async (item: MenuItem) => {
     if (item.onSelect) {
       item.onSelect()
@@ -119,6 +122,13 @@ export function CardMenu(props: Props): JSX.Element {
       setFailed(item.label)
       window.setTimeout(() => setFailed((current) => (current === item.label ? null : current)), 2000)
     }
+  }
+
+  const trailing = (item: MenuItem): JSX.Element => {
+    if (copied() === item.label) return <CheckIcon />
+    if (item.href) return <ArrowOut />
+    if (isCopy(item)) return <CopyIcon />
+    return <></>
   }
 
   return (
@@ -146,21 +156,22 @@ export function CardMenu(props: Props): JSX.Element {
                   type="button"
                   role="menuitem"
                   class="menu-item"
+                  classList={{ 'is-copy': isCopy(item), 'is-link': Boolean(item.href) }}
                   onClick={() => void activate(item)}
                 >
                   <span class="menu-item-label">
-                    <Show when={copied() === item.label}>
-                      <CheckIcon />
-                    </Show>
                     {copied() === item.label
                       ? 'copied'
                       : failed() === item.label
-                        ? 'copy blocked'
+                        ? 'blocked'
                         : item.label}
                   </span>
                   <Show when={item.value}>
-                    <span class="menu-item-value">{item.value}</span>
+                    <span class="menu-item-value" title={item.copy ?? item.value}>
+                      {item.value}
+                    </span>
                   </Show>
+                  <span class="menu-item-icon">{trailing(item)}</span>
                 </button>
               )}
             </For>

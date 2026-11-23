@@ -27,14 +27,14 @@ export function ServiceCard(props: Props): JSX.Element {
     const items: MenuItem[] = []
     if (!isConnect()) items.push({ label: 'Open', href: href() })
     if (props.service.addresses?.tailnet) {
-      items.push({ label: 'Copy tailnet', value: props.service.addresses.tailnet })
+      items.push({ label: 'Tailnet', value: props.service.addresses.tailnet })
     }
     if (props.service.addresses?.lan) {
-      items.push({ label: 'Copy LAN', value: props.service.addresses.lan })
+      items.push({ label: 'LAN', value: props.service.addresses.lan })
     }
-    if (!isConnect()) items.push({ label: 'Copy URL', copy: href() })
+    if (!isConnect()) items.push({ label: 'URL', value: href() })
     if (isConnect() && props.service.connect?.command) {
-      items.push({ label: 'Copy command', value: props.service.connect.command })
+      items.push({ label: 'Command', value: props.service.connect.command })
     }
     return items
   }
@@ -45,13 +45,10 @@ export function ServiceCard(props: Props): JSX.Element {
   const body = (
     <>
       <header class="service-head">
-        <Logo icon={props.service.icon} name={props.service.name} size="lg" />
-        <div class="service-title">
-          <h3>{props.service.name}</h3>
-          <Show when={props.service.description}>
-            <p class="service-desc">{props.service.description}</p>
-          </Show>
-        </div>
+        <h3>{props.service.name}</h3>
+        <Show when={props.service.description}>
+          <p class="service-desc">{props.service.description}</p>
+        </Show>
       </header>
 
       <footer class="service-foot">
@@ -66,11 +63,18 @@ export function ServiceCard(props: Props): JSX.Element {
     </>
   )
 
+  const content = (
+    <>
+      <Logo icon={props.service.icon} name={props.service.name} size="rail" />
+      <div class="service-body">{body}</div>
+    </>
+  )
+
   return (
     <div class="card" classList={{ 'is-connect': isConnect(), 'is-down': state() === 'down' }}>
       <Show
         when={!isConnect()}
-        fallback={<div class="service is-static">{body}</div>}
+        fallback={<div class="service is-static">{content}</div>}
       >
         <a
           class="service"
@@ -80,7 +84,7 @@ export function ServiceCard(props: Props): JSX.Element {
           title={href()}
           aria-label={`${props.service.name} — ${href()}`}
         >
-          {body}
+          {content}
         </a>
       </Show>
       <CardMenu items={menuItems()} label={`${props.service.name} options`} />

@@ -19,6 +19,7 @@ import apple from '../assets/logos/apple.svg?url'
 import archLinux from '../assets/logos/arch-linux.svg?url'
 import bazarr from '../assets/logos/bazarr.svg?url'
 import jellyfin from '../assets/logos/jellyfin.svg?url'
+import omarchy from '../assets/logos/omarchy.svg?url'
 import piHole from '../assets/logos/pi-hole.svg?url'
 import prowlarr from '../assets/logos/prowlarr.svg?url'
 import proxmox from '../assets/logos/proxmox.svg?url'
@@ -39,6 +40,7 @@ const LOGOS: Record<string, string> = {
   'arch-linux': archLinux,
   bazarr,
   jellyfin,
+  omarchy,
   'pi-hole': piHole,
   prowlarr,
   proxmox,
