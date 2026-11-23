@@ -735,7 +735,12 @@ a.machine:hover h3 {
 
 .inline-stat {
   display: inline-flex;
+  align-items: center;
   gap: 5px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.035);
   white-space: nowrap;
 }
 
@@ -842,9 +847,9 @@ a.machine:hover h3 {
   transition: background 120ms ease, color 120ms ease;
 }
 
-.menu-item.is-copy {
-  cursor: copy;
-}
+/* Copy rows keep the normal pointer: the OS renders `cursor: copy` as a plus
+   glyph, which reads as "add" rather than "duplicate". The copy icon on the
+   right is the affordance. */
 
 .menu-item:hover,
 .menu-item:focus-visible {
@@ -963,10 +968,18 @@ a.service:hover h3 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.035);
   white-space: nowrap;
 }
 
 .service-tags {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.035);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
