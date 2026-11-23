@@ -1,0 +1,6 @@
+[Unit]
+Description=homelab: back up Proxmox configuration (/etc/pve)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pve-config-backup.sh

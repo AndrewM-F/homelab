@@ -267,6 +267,32 @@ the hostname to the app with the header stripped, which is the first hop that is
 downstream of both. Anything else that refuses proxied traffic can be added the
 same way.
 
+## Backups
+
+Three jobs, all landing in the hypervisor's `local` storage
+(`/var/lib/vz/dump`), none of them storing a machine's bulk:
+
+| Job | What | When | Size | Keep |
+| --- | --- | --- | --- | --- |
+| `vzdump` (Proxmox job) | containers + zima + ubuntu | Sun 04:00 | ~14 GB | 2 |
+| `pve-config-backup.timer` | `/etc/pve`, network, apt, units | daily 03:30 | 86 KB | 7 |
+| `omarchy-config-backup.timer` | omarchy's config, not its repos | daily 03:45 | 36 MB | 7 |
+
+`pve-config` is the one that makes a rebuild possible at all: VM and container
+definitions live in pmxcfs, so no `vzdump` archive contains them. Restoring on a
+fresh Proxmox is `tar -xf` into `/`.
+
+`omarchy-config` captures `/etc`, dotfiles, `~/.ssh`, and package manifests
+(`pacman -Qqe`, AUR list, enabled units, fonts) — enough to rebuild the
+workstation. Its 88 GB of Projects and 42 GB of `.cache` are excluded as
+reproducible; application profiles under `~/.config` (Claude, Codex, chromium,
+zen, mozilla ≈ 1.5 GB) are excluded as caches in disguise.
+
+Deliberately not backed up: **windows11** (games and a Windows install, rebuilt
+by hand) and **omarchy's bulk** (git repos, toolchains, caches). Everything here
+shares one NVMe with the guests it protects, so it covers mistakes and bad
+upgrades, not drive failure.
+
 ## Notes
 
 ### Edge-injected nodes and hydration

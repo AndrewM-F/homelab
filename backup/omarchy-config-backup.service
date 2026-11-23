@@ -1,0 +1,8 @@
+[Unit]
+Description=homelab: back up omarchy configuration to the hypervisor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omarchy-config-backup.sh
