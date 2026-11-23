@@ -41,6 +41,12 @@ export interface Machine {
    * SSH with a key pinned to `df -B1 <path>`.
    */
   diskProbe?: { ssh: string; path?: string }
+  /**
+   * Full resource sampling for a machine that is not a Proxmox guest. `jump` is
+   * the vmid of a container on the same network as the target, used as the
+   * place to run ssh from.
+   */
+  remoteStats?: { ssh: string; jump?: number }
   tags?: string[]
 }
 
@@ -156,6 +162,22 @@ export interface HostStat {
   }
 }
 
+/**
+ * Resource sample for a machine that is not a Proxmox guest, collected by a
+ * probe script on the host itself.
+ */
+export interface HostSample {
+  id: string
+  cores: number
+  /** Utilisation 0..1 as reported by the host. */
+  cpu: number
+  mem: number
+  memTotal: number
+  disk: number
+  diskTotal: number
+  uptime: number
+}
+
 export interface ProbeResult {
   slug: string
   /** `null` when the service could not be probed from the collector host. */
@@ -176,6 +198,8 @@ export interface Snapshot {
   ts: number
   host: HostStat
   guests: GuestStat[]
+  /** Samples for non-guest machines (a laptop on the tailnet, for example). */
+  hosts: HostSample[]
   probes: ProbeResult[]
   disks: DiskStat[]
   /** Set when the collector answered but reported its own trouble. */

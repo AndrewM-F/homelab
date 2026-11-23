@@ -72,6 +72,15 @@ function parseProbeTcp(value: unknown, path: string): Service['probeTcp'] {
   return { host: asString(raw.host, `${path}.host`)!, port }
 }
 
+function parseRemoteStats(value: unknown, path: string): Machine['remoteStats'] {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'object') fail(path, 'an object', value)
+  const raw = value as Record<string, unknown>
+  const ssh = asString(raw.ssh, `${path}.ssh`)!
+  if (!/^[a-z_][a-z0-9_-]*@[a-z0-9.-]+$/i.test(ssh)) fail(`${path}.ssh`, 'user@host', ssh)
+  return { ssh, jump: asNumber(raw.jump, `${path}.jump`, true) }
+}
+
 function parseDiskProbe(value: unknown, path: string): Machine['diskProbe'] {
   if (value === undefined || value === null) return undefined
   if (typeof value !== 'object') fail(path, 'an object', value)
@@ -107,6 +116,7 @@ function parseMachine(raw: unknown, index: number): Machine {
     addresses: parseAddresses(m.addresses, `${path}.addresses`),
     url: parseUrl(m.url, `${path}.url`),
     diskProbe: parseDiskProbe(m.diskProbe, `${path}.diskProbe`),
+    remoteStats: parseRemoteStats(m.remoteStats, `${path}.remoteStats`),
     tags: asStringArray(m.tags, `${path}.tags`),
   }
 }

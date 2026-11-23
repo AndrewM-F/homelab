@@ -174,6 +174,7 @@ collector tries three sources and records which one it used (`diskSource`):
 | container | `pvesh` rootfs usage |
 | VM | QEMU guest agent filesystem table, root mount preferred (cached 60s) |
 | appliance that cannot run the agent | `df` over SSH, from `machine.diskProbe` |
+| machine that is not a guest at all | a probe script on the host, from `machine.remoteStats` |
 
 The SSH fallback is deliberately narrow. The collector's key is pinned
 server-side to a single read-only command, so it can measure and nothing else:
@@ -189,6 +190,20 @@ restrict,command="df -B1 /DATA" ssh-ed25519 AAAA… homelab-collector@<hyperviso
 `restrict` disables PTYs, agent forwarding and port forwarding, and the forced
 command overrides whatever the client asks for. If no source answers, the card
 falls back to showing provisioned size and says so.
+
+#### Machines outside Proxmox
+
+A laptop on the tailnet has no hypervisor to ask, so it runs a probe script of
+its own — `collector/remote/macos-stats.sh` — which prints `key=value` lines from
+`sysctl`, `top`, `vm_stat` and `df`. The collector reaches it through a container
+that is on the same network (`remoteStats.jump`), and the key is pinned to that
+one script:
+
+```
+restrict,command="/Users/user/.homelab-stats.sh" ssh-ed25519 AAAA… homelab-collector-mac
+```
+
+Samples are cached for 30 s, because `top` needs about a second to measure CPU.
 
 ### 4. Worker
 

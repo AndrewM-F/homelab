@@ -23,6 +23,9 @@ const ROOT = join(import.meta.dir, '..')
 const LOCAL = join(ROOT, 'inventory.local.json')
 const DEV_VARS = join(ROOT, '.dev.vars')
 const COLLECTOR_CONFIG = join(ROOT, 'collector', 'config.json')
+/** Key inside the jump container, pinned server-side to the stats script. */
+const MACHINE_SSH_IDENTITY = process.env.MACHINE_SSH_IDENTITY ?? '/etc/homelab-collector/mac_probe'
+
 
 const args = new Set(process.argv.slice(2))
 const push = args.has('--push')
@@ -94,6 +97,14 @@ const collectorConfig = {
       slug: service.slug,
       vmid: service.probeExec!.vmid,
       command: service.probeExec!.command,
+    })),
+  machine_stats: inventory.machines
+    .filter((machine) => machine.remoteStats)
+    .map((machine) => ({
+      id: machine.id,
+      ssh: machine.remoteStats!.ssh,
+      jump: machine.remoteStats!.jump,
+      identity: MACHINE_SSH_IDENTITY,
     })),
   tcp_probes: inventory.services
     .filter((service) => service.probeTcp)

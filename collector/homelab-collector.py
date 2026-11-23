@@ -57,6 +57,9 @@ SSH_IDENTITY = "/etc/homelab-collector/ssh_probe"
 
 _agent_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
 _ssh_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
+# Machines that are not Proxmox guests report through their own probe script.
+MACHINE_TTL = 30.0
+_machine_cache: dict[str, tuple[float, dict | None]] = {}
 
 # ---------------------------------------------------------------- sampling
 
@@ -267,6 +270,74 @@ def ssh_disk(vmid: int, probe: dict) -> tuple[int, int, str] | None:
     return found
 
 
+def machine_stat(entry: dict) -> dict | None:
+    """
+    Resource sample for a machine that is not a Proxmox guest.
+
+    Runs a probe script on the host (pinned server-side to a single command) and
+    parses its `key=value` output. Cached like the other slow lookups.
+    """
+    machine_id = entry.get("id")
+    now = time.time()
+    cached = _machine_cache.get(machine_id)
+    if cached and now - cached[0] < MACHINE_TTL:
+        return cached[1]
+
+    found: dict | None = None
+    ssh = entry.get("ssh")
+    identity = entry.get("identity")
+    if ssh and identity:
+        remote = [
+            "ssh",
+            "-T",
+            "-i",
+            identity,
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            f"ConnectTimeout={int(SSH_TIMEOUT)}",
+            ssh,
+        ]
+        command = remote
+        jump = entry.get("jump")
+        if jump is not None:
+            # Reach a tailnet-only host from the container that is on the tailnet.
+            command = ["pct", "exec", str(jump), "--"] + remote
+        try:
+            out = subprocess.run(
+                command, capture_output=True, text=True, timeout=SSH_TIMEOUT + 10, check=False
+            )
+            if out.returncode == 0:
+                values: dict[str, float] = {}
+                for line in out.stdout.splitlines():
+                    key, sep, raw = line.partition("=")
+                    if not sep:
+                        continue
+                    try:
+                        values[key.strip()] = float(raw.strip())
+                    except ValueError:
+                        continue
+                total = values.get("mem_total", 0)
+                if total > 0:
+                    found = {
+                        "id": machine_id,
+                        "cores": int(values.get("cores", 0)),
+                        "cpu": round(min(1.0, values.get("cpu_percent", 0.0) / 100.0), 4),
+                        "mem": int(values.get("mem_used", 0)),
+                        "memTotal": int(total),
+                        "disk": int(values.get("disk_used", 0)),
+                        "diskTotal": int(values.get("disk_total", 0)),
+                        "uptime": int(values.get("uptime", 0)),
+                    }
+        except Exception:  # noqa: BLE001 - an unreachable machine is not fatal
+            found = None
+
+    _machine_cache[machine_id] = (now, found)
+    return found
+
+
 def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]:
     """Live CPU/memory/disk for every VM and container, from the cluster API."""
     pvesh = shutil.which("pvesh")
@@ -434,6 +505,7 @@ class State:
         self.probes = config.get("probes") or []
         self.probe_exec = config.get("probe_exec") or []
         self.tcp_probes = config.get("tcp_probes") or []
+        self.machine_stats = config.get("machine_stats") or []
         self.connect = {item["slug"]: item for item in config.get("connect") or [] if item.get("slug")}
         # Served at "/" so a bare hostname opens something useful.
         self.root_connect = config.get("root_connect")
@@ -481,6 +553,7 @@ class State:
             "ts": int(time.time()),
             "host": host_stats(self.interface),
             "guests": guest_stats(warnings, self.disk_probes),
+            "hosts": [sample for sample in (machine_stat(entry) for entry in self.machine_stats) if sample],
             "probes": probes,
             "disks": disk_stats(self.disks),
             "warnings": warnings,

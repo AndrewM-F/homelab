@@ -5,7 +5,7 @@ import { MachineCard } from '../components/machine-card'
 import { ServiceCard } from '../components/service-card'
 import { clock, percent } from '../lib/format'
 import { applyStoredResourceView, readStoredResourceView } from '../lib/resource-view'
-import type { Inventory, Machine, ProbeResult, Service, StatsResponse } from '../lib/types'
+import type { GuestStat, HostSample, Inventory, Machine, ProbeResult, Service, StatsResponse } from '../lib/types'
 import { fetchDashboard, fetchStats } from '../server/api'
 
 const POLL_MS = 10_000
@@ -80,6 +80,13 @@ function Dashboard() {
     return map
   })
 
+  /** Non-guest machines report through their own probe, keyed by machine id. */
+  const hostById = createMemo(() => {
+    const map = new Map<string, HostSample>()
+    for (const sample of snapshot()?.hosts ?? []) map.set(sample.id, sample)
+    return map
+  })
+
   const machineById = createMemo(() => {
     const map = new Map<string, Machine>()
     for (const machine of inventory().machines) map.set(machine.id, machine)
@@ -139,18 +146,43 @@ function Dashboard() {
   const isOnline = (machine: Machine): boolean | undefined => {
     // No sample at all means unknown, not down.
     if (!snapshot()) return undefined
+    if (hostById().has(machine.id)) return true
     if (machine.vmid === undefined) return kindOf(machine) === 'hypervisor' ? true : undefined
     const guest = guestByVmid().get(machine.vmid)
     return guest ? guest.status === 'running' : undefined
   }
 
   /** Devices with no agent cannot report metrics whatever the collector says. */
-  const isMeterable = (machine: Machine) => kindOf(machine) === 'hypervisor' || machine.vmid !== undefined
+  const isMeterable = (machine: Machine) =>
+    kindOf(machine) === 'hypervisor' || machine.vmid !== undefined || hostById().has(machine.id)
+
+  /** Present a host sample in the shape the card already renders. */
+  const toGuest = (sample: HostSample): GuestStat => ({
+    vmid: -1,
+    type: 'qemu',
+    status: 'running',
+    cpu: sample.cpu,
+    maxcpu: sample.cores,
+    mem: sample.mem,
+    maxmem: sample.memTotal,
+    disk: sample.disk,
+    maxdisk: sample.diskTotal,
+    diskSource: sample.diskTotal > 0 ? 'guest' : 'allocated',
+    diskAllocated: sample.diskTotal,
+    uptime: sample.uptime,
+  })
 
   const renderMachine = (machine: Machine) => (
     <MachineCard
       machine={machine}
-      guest={machine.vmid === undefined ? undefined : guestByVmid().get(machine.vmid)}
+      guest={
+        machine.vmid === undefined
+          ? (() => {
+              const sample = hostById().get(machine.id)
+              return sample ? toGuest(sample) : undefined
+            })()
+          : guestByVmid().get(machine.vmid)
+      }
       host={kindOf(machine) === 'hypervisor' ? snapshot()?.host : undefined}
       disk={kindOf(machine) === 'hypervisor' ? snapshot()?.disks?.[0] : undefined}
       online={isOnline(machine)}
