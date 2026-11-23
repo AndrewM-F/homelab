@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "homelab-dashboard",
+  "main": "@tanstack/solid-start/server-entry",
+  "compatibility_date": "2025-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "routes": [
+    { "pattern": "example.com/*", "zone_name": "example.com" },
+    { "pattern": "www.example.com/*", "zone_name": "example.com" }
+  ]
+}

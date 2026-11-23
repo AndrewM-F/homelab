@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.wrangler/
+.cloudflare/
+
+# Local secrets and private inventory. The real homelab addresses, probe URLs
+# and tailnet IPs live only in these files, never in git.
+.dev.vars
+.dev.vars.*
+inventory.local.json
+*.local.json
+collector/config.json
+*.token
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/

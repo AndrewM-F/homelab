@@ -1,0 +1,28 @@
+{
+  "name": "homelab-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "deploy": "vite build && wrangler deploy",
+    "sync": "bun run scripts/sync.ts",
+    "tunnel": "bun run scripts/tunnel.ts"
+  },
+  "dependencies": {
+    "@tanstack/solid-router": "^1.170.43",
+    "@tanstack/solid-start": "^1.169.7",
+    "solid-js": "^1.9.20"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.70.1",
+    "@cloudflare/workers-types": "^4.20251123.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0",
+    "vite-plugin-solid": "^2.11.17",
+    "wrangler": "^4.167.0"
+  }
+}

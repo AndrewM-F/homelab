@@ -1,0 +1,21 @@
+[Unit]
+Description=homelab stats collector (Proxmox host resource + probe API)
+Documentation=https://github.com/AndrewM-F/homelab-dashboard
+After=network-online.target pve-cluster.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/homelab-collector.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+# pvesh needs root to read the cluster resource table.
+User=root
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
