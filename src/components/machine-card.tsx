@@ -1,7 +1,9 @@
 import { Show, type JSX } from 'solid-js'
 import { bytes, duration, percent, rate } from '../lib/format'
+import { resourceView, toggleResourceView } from '../lib/resource-view'
 import type { DiskStat, GuestStat, HostStat, Machine } from '../lib/types'
 import { CardMenu, type MenuItem } from './card-menu'
+import { Gauge } from './gauge'
 import { DownloadIcon, UploadIcon } from './icons'
 import { Logo } from './logo'
 import { Inline, Meter } from './meter'
@@ -39,19 +41,31 @@ export function MachineCard(props: Props): JSX.Element {
   const guestBadge = () =>
     props.machine.kind === 'lxc' ? 'ct' : props.machine.kind === 'vm' ? 'vm' : 'guest'
 
+  const diskNote = () => {
+    if (!sampled()) return undefined
+    return diskKnown()
+      ? `${bytes(diskUsed())} / ${bytes(diskTotal())}`
+      : `${bytes(diskTotal())} alloc`
+  }
+
   const menuItems = (): MenuItem[] => {
     const items: MenuItem[] = []
+    if (props.machine.url) items.push({ label: 'Open', href: props.machine.url })
     if (props.machine.addresses?.tailnet) {
       items.push({ label: 'Copy tailnet', value: props.machine.addresses.tailnet })
     }
     if (props.machine.addresses?.lan) {
       items.push({ label: 'Copy LAN', value: props.machine.addresses.lan })
     }
+    items.push({
+      label: resourceView() === 'gauge' ? 'Show bar meters' : 'Show gauges',
+      onSelect: toggleResourceView,
+    })
     return items
   }
 
-  return (
-    <article class="card machine" classList={{ 'is-down': props.online === false }}>
+  const body = (
+    <>
       <header class="machine-head">
         <div class="machine-title">
           <Logo icon={props.machine.icon} name={props.machine.name} />
@@ -79,32 +93,58 @@ export function MachineCard(props: Props): JSX.Element {
           </p>
         }
       >
-        <div class="meter-stack">
-          <Meter
-            label="cpu"
-            value={sampled() ? cpu() : 0}
-            display={sampled() ? percent(cpu()) : '—'}
-            note={sampled() ? coreLabel() : 'no sample'}
-          />
-          <Meter
-            label="mem"
-            value={sampled() ? memFraction() : 0}
-            display={sampled() ? bytes(memUsed()) : '—'}
-            note={sampled() ? `/ ${bytes(memTotal())}` : undefined}
-          />
-          <Meter
-            label="disk"
-            value={sampled() && diskKnown() ? diskFraction() : 0}
-            display={sampled() && diskKnown() ? bytes(diskUsed()) : '—'}
-            note={
-              sampled() && diskKnown()
-                ? `/ ${bytes(diskTotal())}`
-                : sampled()
-                  ? `${bytes(diskTotal())} allocated`
-                  : undefined
-            }
-          />
-        </div>
+        <Show
+          when={resourceView() === 'gauge'}
+          fallback={
+            <div class="meter-stack">
+              <Meter
+                label="cpu"
+                value={sampled() ? cpu() : 0}
+                display={sampled() ? percent(cpu()) : '—'}
+                note={sampled() ? coreLabel() : 'no sample'}
+              />
+              <Meter
+                label="mem"
+                value={sampled() ? memFraction() : 0}
+                display={sampled() ? bytes(memUsed()) : '—'}
+                note={sampled() ? `/ ${bytes(memTotal())}` : undefined}
+              />
+              <Meter
+                label="disk"
+                value={sampled() && diskKnown() ? diskFraction() : 0}
+                display={sampled() && diskKnown() ? bytes(diskUsed()) : '—'}
+                note={
+                  sampled() && diskKnown()
+                    ? `/ ${bytes(diskTotal())}`
+                    : sampled()
+                      ? `${bytes(diskTotal())} allocated`
+                      : undefined
+                }
+              />
+            </div>
+          }
+        >
+          <div class="gauges">
+            <Gauge
+              value={sampled() ? cpu() : 0}
+              center={sampled() ? percent(cpu()) : '—'}
+              label="cpu"
+              note={sampled() ? coreLabel() : 'no sample'}
+            />
+            <Gauge
+              value={sampled() ? memFraction() : 0}
+              center={sampled() ? percent(memFraction()) : '—'}
+              label="mem"
+              note={sampled() ? `${bytes(memUsed())} / ${bytes(memTotal())}` : undefined}
+            />
+            <Gauge
+              value={sampled() && diskKnown() ? diskFraction() : 0}
+              center={sampled() && diskKnown() ? percent(diskFraction()) : '—'}
+              label="disk"
+              note={diskNote()}
+            />
+          </div>
+        </Show>
 
         <footer class="machine-foot">
           <Inline
@@ -132,8 +172,24 @@ export function MachineCard(props: Props): JSX.Element {
           </Show>
         </footer>
       </Show>
+    </>
+  )
 
+  return (
+    <div class="card" classList={{ 'is-down': props.online === false }}>
+      <Show when={props.machine.url} fallback={<div class="machine">{body}</div>}>
+        <a
+          class="machine"
+          href={props.machine.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={props.machine.url}
+          aria-label={`${props.machine.name} — ${props.machine.url}`}
+        >
+          {body}
+        </a>
+      </Show>
       <CardMenu items={menuItems()} label={`${props.machine.name} options`} />
-    </article>
+    </div>
   )
 }

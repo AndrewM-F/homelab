@@ -4,6 +4,7 @@ import { LockIcon, RefreshIcon, SearchIcon } from '../components/icons'
 import { MachineCard } from '../components/machine-card'
 import { ServiceCard } from '../components/service-card'
 import { clock, percent } from '../lib/format'
+import { applyStoredResourceView, readStoredResourceView } from '../lib/resource-view'
 import type { Inventory, Machine, ProbeResult, Service, StatsResponse } from '../lib/types'
 import { fetchDashboard, fetchStats } from '../server/api'
 
@@ -42,6 +43,10 @@ function Dashboard() {
   }
 
   onMount(() => {
+    // Read after mount: doing it during the first render would produce markup
+    // the server render cannot match.
+    applyStoredResourceView(readStoredResourceView())
+
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refresh()
     }, POLL_MS)

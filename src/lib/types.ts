@@ -34,6 +34,8 @@ export interface Machine {
   icon?: string
   /** Direct addresses for the copy menu. Host only, no port. */
   addresses?: Addresses
+  /** Public URL for this machine's own UI; makes the card a link. */
+  url?: string
   tags?: string[]
 }
 

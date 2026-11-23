@@ -41,6 +41,18 @@ function parseAddresses(value: unknown, path: string): Addresses | undefined {
   return { tailnet, lan }
 }
 
+function parseUrl(value: unknown, path: string): string | undefined {
+  const raw = asString(value, path, true)
+  if (!raw) return undefined
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') fail(path, 'an http(s) URL', raw)
+    return url.toString()
+  } catch {
+    return fail(path, 'a valid URL', raw)
+  }
+}
+
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 const RESERVED = new Set(['www', 'api', 'metrics', 'admin', 'mail', 'ftp', 'ns1', 'ns2'])
 
@@ -65,6 +77,7 @@ function parseMachine(raw: unknown, index: number): Machine {
     vmid: asNumber(m.vmid, `${path}.vmid`, true),
     icon: asString(m.icon, `${path}.icon`, true),
     addresses: parseAddresses(m.addresses, `${path}.addresses`),
+    url: parseUrl(m.url, `${path}.url`),
     tags: asStringArray(m.tags, `${path}.tags`),
   }
 }

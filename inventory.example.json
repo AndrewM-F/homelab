@@ -16,7 +16,8 @@
       "icon": "proxmox",
       "addresses": {
         "lan": "10.0.0.10"
-      }
+      },
+      "url": "https://hypervisor.example.com"
     },
     {
       "id": "nas",

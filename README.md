@@ -89,7 +89,8 @@ the first mistake.
   "machines": [
     // kind: hypervisor | vm | lxc | device (device = on the network, no agent)
     { "id": "nas", "name": "nas", "role": "storage", "kind": "vm", "vmid": 101 },
-    { "id": "laptop", "name": "laptop", "role": "workstation", "kind": "device", "icon": "apple" }
+    { "id": "laptop", "name": "laptop", "role": "workstation", "kind": "device", "icon": "apple",
+      "url": "https://laptop.example.com" }   // optional: makes the card a link
   ],
   "services": [
     {
@@ -124,9 +125,13 @@ role and an explicit "no metrics agent" note rather than a row of fake zeroes.
 `icon` picks a logo from `src/lib/logos.ts`. A slug with no mark falls back to a
 monogram, which is the honest outcome for software that publishes none. Logos
 are vendored from the community [dashboard-icons](https://github.com/homarr-labs/dashboard-icons)
-set and imported through Vite, so they are served from the dashboard's own
-origin and the page makes no third-party requests. Each mark remains the
-trademark of its project and is used only to identify it.
+and [selfh.st/icons](https://github.com/selfhst/icons) sets and imported through
+Vite, so they are served from the dashboard's own origin and the page makes no
+third-party requests. Each mark remains the trademark of its project and is
+used only to identify it.
+
+Resources draw as half-circle gauges. Any card's **⋯** menu switches every card
+between gauges and the linear meters; the choice is remembered per browser.
 
 ### 2. Tunnel and DNS
 

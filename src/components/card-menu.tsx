@@ -9,6 +9,8 @@ export interface MenuItem {
   copy?: string
   /** Setting this makes the item open a URL instead of copying. */
   href?: string
+  /** Setting this makes the item run a command instead of copying. */
+  onSelect?: () => void
 }
 
 /**
@@ -96,6 +98,11 @@ export function CardMenu(props: Props): JSX.Element {
   })
 
   const activate = async (item: MenuItem) => {
+    if (item.onSelect) {
+      item.onSelect()
+      close()
+      return
+    }
     if (item.href) {
       window.open(item.href, '_blank', 'noreferrer,noopener')
       close()

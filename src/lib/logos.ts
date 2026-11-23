@@ -32,6 +32,7 @@ import tailscale from '../assets/logos/tailscale.svg?url'
 import uptimeKuma from '../assets/logos/uptime-kuma.svg?url'
 import vaultwarden from '../assets/logos/vaultwarden.svg?url'
 import windows11 from '../assets/logos/windows-11.svg?url'
+import zimaos from '../assets/logos/zimaos.svg?url'
 
 const LOGOS: Record<string, string> = {
   apple,
@@ -51,6 +52,7 @@ const LOGOS: Record<string, string> = {
   'uptime-kuma': uptimeKuma,
   vaultwarden,
   'windows-11': windows11,
+  zimaos,
 }
 
 export function logoFor(key: string | undefined): string | undefined {
