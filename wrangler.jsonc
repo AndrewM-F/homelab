@@ -4,6 +4,7 @@
   "main": "@tanstack/solid-start/server-entry",
   "compatibility_date": "2025-11-01",
   "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [{ "binding": "INVENTORY", "id": "00000000000000000000000000000000" }],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

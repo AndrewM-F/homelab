@@ -3,7 +3,7 @@ import { readInventory, readStats, publicInventory } from './data'
 
 /** Everything the dashboard renders. Internal addresses are stripped. */
 export const fetchDashboard = createServerFn({ method: 'GET' }).handler(async () => {
-  const { inventory, degraded } = readInventory()
+  const { inventory, degraded } = await readInventory()
   return {
     inventory: publicInventory(inventory),
     degraded,

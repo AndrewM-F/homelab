@@ -1,4 +1,4 @@
-import type { Inventory, Machine, Service } from './types'
+import type { Addresses, Inventory, Machine, Service } from './types'
 
 class ShapeError extends Error {}
 
@@ -31,6 +31,16 @@ function asNumber(value: unknown, path: string, optional = false): number | unde
   return value
 }
 
+function parseAddresses(value: unknown, path: string): Addresses | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'object') fail(path, 'an object', value)
+  const raw = value as Record<string, unknown>
+  const tailnet = asString(raw.tailnet, `${path}.tailnet`, true)
+  const lan = asString(raw.lan, `${path}.lan`, true)
+  if (!tailnet && !lan) return undefined
+  return { tailnet, lan }
+}
+
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 const RESERVED = new Set(['www', 'api', 'metrics', 'admin', 'mail', 'ftp', 'ns1', 'ns2'])
 
@@ -54,6 +64,7 @@ function parseMachine(raw: unknown, index: number): Machine {
     kind: parseKind(m.kind, m.vmid, `${path}.kind`),
     vmid: asNumber(m.vmid, `${path}.vmid`, true),
     icon: asString(m.icon, `${path}.icon`, true),
+    addresses: parseAddresses(m.addresses, `${path}.addresses`),
     tags: asStringArray(m.tags, `${path}.tags`),
   }
 }
@@ -100,6 +111,7 @@ function parseService(raw: unknown, index: number): Service {
     originHost: asString(s.originHost, `${path}.originHost`, true),
     probeUrl: asString(s.probeUrl, `${path}.probeUrl`, true),
     path: asString(s.path, `${path}.path`, true),
+    addresses: parseAddresses(s.addresses, `${path}.addresses`),
     connect,
     tags: asStringArray(s.tags, `${path}.tags`),
   }

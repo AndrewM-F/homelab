@@ -12,6 +12,16 @@ export type GuestType = 'qemu' | 'lxc'
  */
 export type MachineKind = 'hypervisor' | 'vm' | 'lxc' | 'device'
 
+/**
+ * Where a host or service can be reached off the public internet.
+ * `tailnet` is a Tailscale address, `lan` an address on the home network.
+ * Values are `host` for machines and `host[:port]` for services.
+ */
+export interface Addresses {
+  tailnet?: string
+  lan?: string
+}
+
 export interface Machine {
   /** Stable id; referenced by `Service.machine`. */
   id: string
@@ -22,6 +32,8 @@ export interface Machine {
   vmid?: number
   /** Logo key from `src/lib/logos.ts`. Falls back to a monogram. */
   icon?: string
+  /** Direct addresses for the copy menu. Host only, no port. */
+  addresses?: Addresses
   tags?: string[]
 }
 
@@ -50,6 +62,12 @@ export interface Service {
   probeUrl?: string
   /** Path appended to the public URL in the UI. */
   path?: string
+  /**
+   * Explicit `host[:port]` overrides for the copy menu. Normally derived from
+   * `origin` and `probeUrl`; set this when a service only listens on one path
+   * (for example a container bound to the tailnet interface alone).
+   */
+  addresses?: Addresses
   /** Non-HTTP services get a connect page instead of a tunnel. */
   connect?: {
     protocol: ConnectProtocol

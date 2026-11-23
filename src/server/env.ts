@@ -6,7 +6,9 @@ import { env } from 'cloudflare:workers'
  * secrets and never appear in this repository.
  */
 export interface Bindings {
-  /** Full inventory document, JSON. Set by `bun run sync`. */
+  /** Inventory document, JSON, read from KV. Written by `bun run sync --push`. */
+  INVENTORY?: KVNamespace
+  /** Fallback binding for local dev, where KV is empty. */
   INVENTORY_JSON?: string
   /** Collector base URL reachable through the Cloudflare Tunnel. */
   STATS_URL?: string

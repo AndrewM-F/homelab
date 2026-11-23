@@ -1,6 +1,7 @@
 import { Show, type JSX } from 'solid-js'
 import { bytes, duration, percent, rate } from '../lib/format'
 import type { DiskStat, GuestStat, HostStat, Machine } from '../lib/types'
+import { CardMenu, type MenuItem } from './card-menu'
 import { DownloadIcon, UploadIcon } from './icons'
 import { Logo } from './logo'
 import { Inline, Meter } from './meter'
@@ -17,9 +18,9 @@ interface Props {
 }
 
 export function MachineCard(props: Props): JSX.Element {
+  const sampled = () => Boolean(props.guest || props.host)
   const metered = () => props.meterable
 
-  const sampled = () => Boolean(props.guest || props.host)
   const cpu = () => (props.guest ? props.guest.cpu : (props.host?.cpu ?? 0))
   const memUsed = () => (props.guest ? props.guest.mem : (props.host?.memUsed ?? 0))
   const memTotal = () => (props.guest ? props.guest.maxmem : (props.host?.memTotal ?? 0))
@@ -38,8 +39,19 @@ export function MachineCard(props: Props): JSX.Element {
   const guestBadge = () =>
     props.machine.kind === 'lxc' ? 'ct' : props.machine.kind === 'vm' ? 'vm' : 'guest'
 
+  const menuItems = (): MenuItem[] => {
+    const items: MenuItem[] = []
+    if (props.machine.addresses?.tailnet) {
+      items.push({ label: 'Copy tailnet', value: props.machine.addresses.tailnet })
+    }
+    if (props.machine.addresses?.lan) {
+      items.push({ label: 'Copy LAN', value: props.machine.addresses.lan })
+    }
+    return items
+  }
+
   return (
-    <article class="machine" classList={{ 'is-down': props.online === false }}>
+    <article class="card machine" classList={{ 'is-down': props.online === false }}>
       <header class="machine-head">
         <div class="machine-title">
           <Logo icon={props.machine.icon} name={props.machine.name} />
@@ -120,6 +132,8 @@ export function MachineCard(props: Props): JSX.Element {
           </Show>
         </footer>
       </Show>
+
+      <CardMenu items={menuItems()} label={`${props.machine.name} options`} />
     </article>
   )
 }

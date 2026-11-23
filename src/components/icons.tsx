@@ -58,6 +58,24 @@ export function TerminalIcon(props: { size?: number }): JSX.Element {
   )
 }
 
+export function MoreIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 14}px`, height: `${props.size ?? 14}px` }}>
+      <circle cx="3.25" cy="8" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="8" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="12.75" cy="8" r="1.15" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function CheckIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>
+      <path d="m3 8.5 3.2 3.2L13 5" />
+    </svg>
+  )
+}
+
 export function DownloadIcon(props: { size?: number }): JSX.Element {
   return (
     <svg {...base} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>

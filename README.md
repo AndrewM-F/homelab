@@ -197,6 +197,23 @@ clone renders without leaking anything.
 
 ## Notes
 
+### Edge-injected nodes and hydration
+
+Cloudflare injects a hidden anchor as the first child of `<body>` on every
+proxied zone in this account:
+
+```html
+<a href="/cdn-cgi/content?id=…" aria-hidden="true" style="display:none"></a>
+```
+
+Solid hydrates by matching nodes positionally, so one unexpected node shifts the
+tree and hydration gives up *silently* — the page renders, then ignores every
+click, keystroke and menu. `src/client.tsx` removes leading `<body>` elements
+that the server did not produce (anything without Solid's `data-hk` marker)
+before hydrating. Keep that file if you change frameworks; without it the
+dashboard is a static picture behind Cloudflare.
+
+
 - TanStack Start pins `solid-js@^1.9`. The Solid 2 line (`@tanstack/solid-start@2.0.0-rc`)
   is published but its core packages are version-skewed, so it does not build.
   When that lands, this repo is a two-line dependency bump plus `@solidjs/web`

@@ -13,7 +13,10 @@
         "proxmox"
       ],
       "kind": "hypervisor",
-      "icon": "proxmox"
+      "icon": "proxmox",
+      "addresses": {
+        "lan": "10.0.0.10"
+      }
     },
     {
       "id": "nas",
@@ -23,7 +26,11 @@
       "tags": [
         "docker"
       ],
-      "kind": "vm"
+      "kind": "vm",
+      "addresses": {
+        "tailnet": "100.64.0.21",
+        "lan": "10.0.0.21"
+      }
     },
     {
       "id": "desktop",
@@ -34,7 +41,11 @@
         "linux"
       ],
       "kind": "vm",
-      "icon": "arch-linux"
+      "icon": "arch-linux",
+      "addresses": {
+        "tailnet": "100.64.0.22",
+        "lan": "10.0.0.22"
+      }
     },
     {
       "id": "windows",
@@ -45,7 +56,11 @@
         "windows"
       ],
       "kind": "vm",
-      "icon": "windows-11"
+      "icon": "windows-11",
+      "addresses": {
+        "tailnet": "100.64.0.23",
+        "lan": "10.0.0.23"
+      }
     },
     {
       "id": "laptop",
@@ -55,7 +70,10 @@
       "icon": "apple",
       "tags": [
         "macos"
-      ]
+      ],
+      "addresses": {
+        "tailnet": "100.64.0.24"
+      }
     },
     {
       "id": "dns",
@@ -66,7 +84,10 @@
         "lxc"
       ],
       "kind": "lxc",
-      "icon": "pi-hole"
+      "icon": "pi-hole",
+      "addresses": {
+        "lan": "10.0.0.30"
+      }
     },
     {
       "id": "status",
@@ -77,7 +98,10 @@
         "lxc"
       ],
       "kind": "lxc",
-      "icon": "uptime-kuma"
+      "icon": "uptime-kuma",
+      "addresses": {
+        "lan": "10.0.0.31"
+      }
     }
   ],
   "services": [
@@ -194,7 +218,11 @@
         "address": "windows.example.com:3389",
         "command": "cloudflared access rdp --hostname windows.example.com --url rdp://localhost:13389"
       },
-      "icon": "windows-11"
+      "icon": "windows-11",
+      "addresses": {
+        "tailnet": "100.64.0.23:3389",
+        "lan": "10.0.0.23:3389"
+      }
     }
   ]
 }
