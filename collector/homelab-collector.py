@@ -30,6 +30,7 @@ import html
 import json
 import os
 import shutil
+import socket
 import ssl
 import subprocess
 import sys
@@ -374,6 +375,47 @@ def probe(entry: dict) -> dict:
         return {"slug": entry["slug"], "up": False, "error": type(error).__name__}
 
 
+def probe_exec(entry: dict) -> dict:
+    """Run a check inside the guest, for services only reachable from there."""
+    vmid = entry.get("vmid")
+    command = entry.get("command")
+    if vmid is None or not command:
+        return {"slug": entry.get("slug"), "up": None, "error": "incomplete exec probe"}
+    pct = shutil.which("pct")
+    if not pct:
+        return {"slug": entry.get("slug"), "up": None, "error": "pct not found"}
+
+    started = time.monotonic()
+    try:
+        out = subprocess.run(
+            [pct, "exec", str(vmid), "--", "sh", "-c", command],
+            capture_output=True,
+            text=True,
+            timeout=PROBE_TIMEOUT + 3,
+            check=False,
+        )
+        elapsed = int((time.monotonic() - started) * 1000)
+        return {"slug": entry["slug"], "up": out.returncode == 0, "status": out.returncode, "ms": elapsed}
+    except Exception as error:  # noqa: BLE001
+        return {"slug": entry.get("slug"), "up": False, "error": type(error).__name__}
+
+
+def probe_tcp(entry: dict) -> dict:
+    """Plain connect test for services with no HTTP surface."""
+    host = entry.get("host")
+    port = entry.get("port")
+    if not host or not port:
+        return {"slug": entry.get("slug"), "up": None, "error": "incomplete tcp probe"}
+
+    started = time.monotonic()
+    try:
+        with socket.create_connection((host, int(port)), timeout=PROBE_TIMEOUT):
+            elapsed = int((time.monotonic() - started) * 1000)
+            return {"slug": entry["slug"], "up": True, "ms": elapsed}
+    except OSError as error:
+        return {"slug": entry.get("slug"), "up": False, "error": type(error).__name__}
+
+
 def run_probes(entries: list[dict], executor: ThreadPoolExecutor) -> list[dict]:
     if not entries:
         return []
@@ -389,6 +431,8 @@ class State:
         self.interface = config.get("interface") or default_interface()
         self.disks = config.get("disks") or ["/"]
         self.probes = config.get("probes") or []
+        self.probe_exec = config.get("probe_exec") or []
+        self.tcp_probes = config.get("tcp_probes") or []
         self.connect = {item["slug"]: item for item in config.get("connect") or [] if item.get("slug")}
         # Served at "/" so a bare hostname opens something useful.
         self.root_connect = config.get("root_connect")
@@ -400,6 +444,10 @@ class State:
     def snapshot(self) -> dict:
         warnings: list[str] = []
         probes = run_probes(self.probes, self.executor)
+        if self.probe_exec:
+            probes += list(self.executor.map(probe_exec, self.probe_exec))
+        if self.tcp_probes:
+            probes += list(self.executor.map(probe_tcp, self.tcp_probes))
         return {
             "ts": int(time.time()),
             "host": host_stats(self.interface),

@@ -53,6 +53,25 @@ function parseUrl(value: unknown, path: string): string | undefined {
   }
 }
 
+function parseProbeExec(value: unknown, path: string): Service['probeExec'] {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'object') fail(path, 'an object', value)
+  const raw = value as Record<string, unknown>
+  return {
+    vmid: asNumber(raw.vmid, `${path}.vmid`)!,
+    command: asString(raw.command, `${path}.command`)!,
+  }
+}
+
+function parseProbeTcp(value: unknown, path: string): Service['probeTcp'] {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'object') fail(path, 'an object', value)
+  const raw = value as Record<string, unknown>
+  const port = asNumber(raw.port, `${path}.port`)!
+  if (!Number.isInteger(port) || port < 1 || port > 65535) fail(`${path}.port`, 'a TCP port', port)
+  return { host: asString(raw.host, `${path}.host`)!, port }
+}
+
 function parseDiskProbe(value: unknown, path: string): Machine['diskProbe'] {
   if (value === undefined || value === null) return undefined
   if (typeof value !== 'object') fail(path, 'an object', value)
@@ -133,6 +152,8 @@ function parseService(raw: unknown, index: number): Service {
     originName: asString(s.originName, `${path}.originName`, true),
     originHost: asString(s.originHost, `${path}.originHost`, true),
     probeUrl: asString(s.probeUrl, `${path}.probeUrl`, true),
+    probeExec: parseProbeExec(s.probeExec, `${path}.probeExec`),
+    probeTcp: parseProbeTcp(s.probeTcp, `${path}.probeTcp`),
     path: asString(s.path, `${path}.path`, true),
     addresses: parseAddresses(s.addresses, `${path}.addresses`),
     connect,

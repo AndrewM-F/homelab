@@ -88,6 +88,20 @@ const collectorConfig = {
   probes: inventory.services
     .filter((service) => service.probeUrl)
     .map((service) => ({ slug: service.slug, url: service.probeUrl })),
+  probe_exec: inventory.services
+    .filter((service) => service.probeExec)
+    .map((service) => ({
+      slug: service.slug,
+      vmid: service.probeExec!.vmid,
+      command: service.probeExec!.command,
+    })),
+  tcp_probes: inventory.services
+    .filter((service) => service.probeTcp)
+    .map((service) => ({
+      slug: service.slug,
+      host: service.probeTcp!.host,
+      port: service.probeTcp!.port,
+    })),
   root_connect: inventory.services.find((service) => service.connect)?.slug,
   disk_probes: inventory.machines
     .filter((machine) => machine.diskProbe && machine.vmid !== undefined)

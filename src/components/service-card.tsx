@@ -24,15 +24,14 @@ export function ServiceCard(props: Props): JSX.Element {
   const isConnect = () => Boolean(props.service.connect)
 
   const menuItems = (): MenuItem[] => {
-    const items: MenuItem[] = []
-    if (!isConnect()) items.push({ label: 'Open', href: href() })
+    const items: MenuItem[] = [{ label: 'Open', href: href() }]
     if (props.service.addresses?.tailnet) {
       items.push({ label: 'Tailnet', value: props.service.addresses.tailnet })
     }
     if (props.service.addresses?.lan) {
       items.push({ label: 'LAN', value: props.service.addresses.lan })
     }
-    if (!isConnect()) items.push({ label: 'URL', value: href() })
+    items.push({ label: 'URL', value: href() })
     if (isConnect() && props.service.connect?.command) {
       items.push({ label: 'Command', value: props.service.connect.command })
     }
@@ -72,21 +71,16 @@ export function ServiceCard(props: Props): JSX.Element {
 
   return (
     <div class="card" classList={{ 'is-connect': isConnect(), 'is-down': state() === 'down' }}>
-      <Show
-        when={!isConnect()}
-        fallback={<div class="service is-static">{content}</div>}
+      <a
+        class="service"
+        href={href()}
+        target="_blank"
+        rel="noreferrer noopener"
+        title={href()}
+        aria-label={`${props.service.name} — ${href()}`}
       >
-        <a
-          class="service"
-          href={href()}
-          target="_blank"
-          rel="noreferrer noopener"
-          title={href()}
-          aria-label={`${props.service.name} — ${href()}`}
-        >
-          {content}
-        </a>
-      </Show>
+        {content}
+      </a>
       <CardMenu items={menuItems()} label={`${props.service.name} options`} />
     </div>
   )

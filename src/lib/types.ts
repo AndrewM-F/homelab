@@ -67,6 +67,13 @@ export interface Service {
   originHost?: string
   /** Optional health probe run by the collector from the LAN. */
   probeUrl?: string
+  /**
+   * Probe run inside the guest via `pct exec`, for services that are only
+   * reachable from within their own container (a tailnet-only listener).
+   */
+  probeExec?: { vmid: number; command: string }
+  /** Plain TCP connect probe, for services with no HTTP surface (RDP, SSH). */
+  probeTcp?: { host: string; port: number }
   /** Path appended to the public URL in the UI. */
   path?: string
   /**
