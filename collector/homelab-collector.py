@@ -44,6 +44,12 @@ CONFIG_PATH = os.environ.get("HOMELAB_COLLECTOR_CONFIG", "/etc/homelab-collector
 SAMPLE_SECONDS = 5.0
 PROBE_TIMEOUT = 3.5
 PVESH_TIMEOUT = 8.0
+AGENT_TIMEOUT = 6.0
+# Filesystem usage moves slowly and the agent call is not free, so it is cached
+# far longer than the resource sample itself.
+AGENT_TTL = 60.0
+
+_agent_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
 
 # ---------------------------------------------------------------- sampling
 
@@ -154,6 +160,52 @@ def host_stats(interface: str) -> dict:
     }
 
 
+def agent_disk(vmid: int, node: str) -> tuple[int, int, str] | None:
+    """
+    Real filesystem usage inside a VM, via the QEMU guest agent.
+
+    Proxmox reports only provisioned size for VMs, so without this the dashboard
+    can show what a disk is allowed to grow to but not what is on it.
+    """
+    now = time.time()
+    cached = _agent_cache.get(vmid)
+    if cached and now - cached[0] < AGENT_TTL:
+        return cached[1]
+
+    found: tuple[int, int, str] | None = None
+    pvesh = shutil.which("pvesh")
+    if pvesh:
+        try:
+            out = subprocess.run(
+                [pvesh, "get", f"/nodes/{node}/qemu/{vmid}/agent/get-fsinfo", "--output-format", "json"],
+                capture_output=True,
+                text=True,
+                timeout=AGENT_TIMEOUT,
+                check=False,
+            )
+            if out.returncode == 0:
+                payload = json.loads(out.stdout or "{}")
+                entries = payload.get("result", payload) if isinstance(payload, dict) else payload
+                for entry in entries or []:
+                    total = int(entry.get("total-bytes") or 0)
+                    if total <= 0:
+                        continue
+                    mount = str(entry.get("mountpoint", ""))
+                    used = int(entry.get("used-bytes") or 0)
+                    # Prefer the root filesystem; otherwise the largest one, which
+                    # skips Windows' recovery and EFI partitions.
+                    if mount in ("/", "C:\\", "C:/"):
+                        found = (used, total, mount)
+                        break
+                    if found is None or total > found[1]:
+                        found = (used, total, mount)
+        except Exception:  # noqa: BLE001 - a missing agent is expected, not fatal
+            found = None
+
+    _agent_cache[vmid] = (now, found)
+    return found
+
+
 def guest_stats(warnings: list[str]) -> list[dict]:
     """Live CPU/memory/disk for every VM and container, from the cluster API."""
     pvesh = shutil.which("pvesh")
@@ -187,17 +239,33 @@ def guest_stats(warnings: list[str]) -> list[dict]:
         kind = item.get("type")
         if kind not in ("qemu", "lxc"):
             continue
+
+        vmid = int(item.get("vmid") or 0)
+        used = int(item.get("disk") or 0)
+        allocated = int(item.get("maxdisk") or 0)
+        total = allocated
+        # Containers report real usage; VMs report zero unless the agent answers.
+        source = "guest" if used > 0 else "allocated"
+
+        if kind == "qemu" and item.get("status") == "running":
+            agent = agent_disk(vmid, item.get("node") or os.uname().nodename)
+            if agent:
+                used, total, _mount = agent
+                source = "guest"
+
         guests.append(
             {
-                "vmid": item.get("vmid"),
+                "vmid": vmid,
                 "type": kind,
                 "status": item.get("status", "unknown"),
                 "cpu": round(float(item.get("cpu") or 0), 4),
                 "maxcpu": int(item.get("maxcpu") or 0),
                 "mem": int(item.get("mem") or 0),
                 "maxmem": int(item.get("maxmem") or 0),
-                "disk": int(item.get("disk") or 0),
-                "maxdisk": int(item.get("maxdisk") or 0),
+                "disk": used,
+                "maxdisk": total,
+                "diskAllocated": allocated,
+                "diskSource": source,
                 "uptime": int(item.get("uptime") or 0),
                 "name": item.get("name"),
             }

@@ -28,14 +28,16 @@ export function MachineCard(props: Props): JSX.Element {
   const memTotal = () => (props.guest ? props.guest.maxmem : (props.host?.memTotal ?? 0))
   const diskUsed = () => (props.guest ? props.guest.disk : (props.disk?.used ?? 0))
   const diskTotal = () => (props.guest ? props.guest.maxdisk : (props.disk?.total ?? 0))
+  const diskAllocated = () => (props.guest ? props.guest.diskAllocated : (props.disk?.total ?? 0))
   const uptime = () => (props.guest ? props.guest.uptime : (props.host?.uptime ?? 0))
   const cores = () => props.guest?.maxcpu ?? props.host?.cores ?? 0
   const coreLabel = () => `${cores()} core${cores() === 1 ? '' : 's'}`
 
   const memFraction = () => (memTotal() > 0 ? memUsed() / memTotal() : 0)
   const diskFraction = () => (diskTotal() > 0 ? diskUsed() / diskTotal() : 0)
-  // Proxmox reports allocated size but no usage for VMs; containers report both.
-  const diskKnown = () => (props.guest ? props.guest.disk > 0 : diskTotal() > 0)
+  // Containers report rootfs usage; VMs only report it when the guest agent
+  // answers, so `diskSource` says which of the two numbers this is.
+  const diskKnown = () => (props.guest ? props.guest.diskSource === 'guest' : diskTotal() > 0)
 
   const status = () => (props.online === undefined ? 'unknown' : props.online ? 'up' : 'down')
   const guestBadge = () =>
@@ -45,7 +47,7 @@ export function MachineCard(props: Props): JSX.Element {
     if (!sampled()) return undefined
     return diskKnown()
       ? `${bytes(diskUsed())} / ${bytes(diskTotal())}`
-      : `${bytes(diskTotal())} alloc`
+      : `${bytes(diskAllocated())} alloc`
   }
 
   const menuItems = (): MenuItem[] => {
@@ -117,7 +119,7 @@ export function MachineCard(props: Props): JSX.Element {
                   sampled() && diskKnown()
                     ? `/ ${bytes(diskTotal())}`
                     : sampled()
-                      ? `${bytes(diskTotal())} allocated`
+                      ? `${bytes(diskAllocated())} allocated`
                       : undefined
                 }
               />

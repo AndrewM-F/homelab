@@ -109,6 +109,14 @@ export interface GuestStat {
   maxmem: number
   disk: number
   maxdisk: number
+  /**
+   * Where `disk`/`maxdisk` came from. `guest` is real filesystem usage, read
+   * from a container's rootfs or a VM's guest agent; `allocated` means the VM
+   * answered no agent and only its provisioned size is known.
+   */
+  diskSource: 'guest' | 'allocated'
+  /** Provisioned size, always known even when usage is not. */
+  diskAllocated: number
   uptime: number
 }
 
