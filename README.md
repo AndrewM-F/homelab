@@ -158,6 +158,12 @@ ssh root@<hypervisor> systemctl enable --now homelab-collector
 It answers `GET /stats` (resource sample + probes), `GET /health`, and
 `GET /connect/<slug>` for non-HTTP services.
 
+`/stats` is served from the last completed sample: a background thread rebuilds
+it every 5 s. The request path never collects, so a slow probe (the guest agent,
+an SSH check, a distant host) cannot drag a request past the dashboard's timeout
+— which is exactly what used to happen when one probe pointed at
+`login.tailscale.com` and took 1.4 s of every call.
+
 #### Where disk numbers come from
 
 Proxmox reports usage for containers but only *provisioned size* for VMs, so the

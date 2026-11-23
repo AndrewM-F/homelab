@@ -43,6 +43,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CONFIG_PATH = os.environ.get("HOMELAB_COLLECTOR_CONFIG", "/etc/homelab-collector.json")
 SAMPLE_SECONDS = 5.0
+SAMPLE_INTERVAL_SECONDS = 5.0
 PROBE_TIMEOUT = 3.5
 PVESH_TIMEOUT = 8.0
 AGENT_TIMEOUT = 6.0
@@ -440,8 +441,36 @@ class State:
             int(item["vmid"]): item for item in config.get("disk_probes") or [] if item.get("vmid") is not None
         }
         self.executor = ThreadPoolExecutor(max_workers=12)
+        self._lock = threading.Lock()
+        self._snapshot: dict | None = None
+        self._building = False
 
-    def snapshot(self) -> dict:
+    def current(self) -> dict | None:
+        """The last completed sample. Requests never wait for collection."""
+        with self._lock:
+            return self._snapshot
+
+    def refresh(self) -> None:
+        """Build a sample off the request path and publish it."""
+        if self._building:
+            return
+        self._building = True
+        try:
+            built = self.collect()
+            with self._lock:
+                self._snapshot = built
+        finally:
+            self._building = False
+
+    def sampler_loop(self, interval: float) -> None:
+        while True:
+            try:
+                self.refresh()
+            except Exception as error:  # noqa: BLE001 - never let the thread die
+                print(f"collector: sample failed: {error}", file=sys.stderr, flush=True)
+            time.sleep(interval)
+
+    def collect(self) -> dict:
         warnings: list[str] = []
         probes = run_probes(self.probes, self.executor)
         if self.probe_exec:
@@ -534,7 +563,12 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/stats":
             try:
-                self.send_json(self.state.snapshot())
+                sample = self.state.current()
+                if sample is None:
+                    # Nothing sampled yet (fresh start): build once, then serve.
+                    self.state.refresh()
+                    sample = self.state.current()
+                self.send_json(sample or {"error": "no sample available"}, status=200 if sample else 503)
             except Exception as error:  # noqa: BLE001
                 self.send_json({"error": f"{type(error).__name__}: {error}"}, status=500)
             return
@@ -582,6 +616,9 @@ def main() -> None:
     port = int(listen.get("port", 9101))
 
     threading.Thread(target=sample_network, args=(state.interface,), daemon=True).start()
+    # Collect on a fixed cadence so /stats answers from cache and a slow probe
+    # cannot drag a request past the dashboard's timeout.
+    threading.Thread(target=state.sampler_loop, args=(SAMPLE_INTERVAL_SECONDS,), daemon=True).start()
 
     Handler.state = state
     server = ThreadingHTTPServer((host, port), Handler)
