@@ -17,6 +17,10 @@ export const Route = createFileRoute('/')({
   component: Dashboard,
 })
 
+function kindOf(machine: Machine): NonNullable<Machine['kind']> {
+  return machine.kind ?? (machine.vmid === undefined ? 'device' : 'vm')
+}
+
 function Dashboard() {
   const data = Route.useLoaderData()
   const inventory = (): Inventory => data().inventory
@@ -88,6 +92,10 @@ function Dashboard() {
     )
   })
 
+  /** Bare metal and virtual machines sit together; containers get their own row. */
+  const computers = createMemo(() => filteredMachines().filter((m) => kindOf(m) !== 'lxc'))
+  const containers = createMemo(() => filteredMachines().filter((m) => kindOf(m) === 'lxc'))
+
   const filteredGroups = createMemo(() => {
     const needle = query().trim().toLowerCase()
     const groups = new Map<string, Service[]>()
@@ -116,13 +124,28 @@ function Dashboard() {
     return snap.guests.filter((guest) => guest.status === 'running').length
   })
 
-  const serviceCount = createMemo(() => inventory().services.length)
-
-  const isOnline = (machine: Machine): boolean => {
-    if (machine.vmid === undefined) return Boolean(snapshot())
+  /** `undefined` for machines with no metrics agent, so the dot stays neutral. */
+  const isOnline = (machine: Machine): boolean | undefined => {
+    // No sample at all means unknown, not down.
+    if (!snapshot()) return undefined
+    if (machine.vmid === undefined) return kindOf(machine) === 'hypervisor' ? true : undefined
     const guest = guestByVmid().get(machine.vmid)
-    return guest?.status === 'running'
+    return guest ? guest.status === 'running' : undefined
   }
+
+  /** Devices with no agent cannot report metrics whatever the collector says. */
+  const isMeterable = (machine: Machine) => kindOf(machine) === 'hypervisor' || machine.vmid !== undefined
+
+  const renderMachine = (machine: Machine) => (
+    <MachineCard
+      machine={machine}
+      guest={machine.vmid === undefined ? undefined : guestByVmid().get(machine.vmid)}
+      host={kindOf(machine) === 'hypervisor' ? snapshot()?.host : undefined}
+      disk={kindOf(machine) === 'hypervisor' ? snapshot()?.disks?.[0] : undefined}
+      online={isOnline(machine)}
+      meterable={isMeterable(machine)}
+    />
+  )
 
   return (
     <div class="shell">
@@ -139,10 +162,10 @@ function Dashboard() {
             <input
               ref={searchRef}
               type="search"
-              placeholder="filter services and machines"
+              placeholder="filter machines and services"
               value={query()}
               onInput={(event) => setQuery(event.currentTarget.value)}
-              aria-label="Filter services and machines"
+              aria-label="Filter machines and services"
             />
             <kbd>/</kbd>
           </label>
@@ -168,11 +191,9 @@ function Dashboard() {
           )}
         </Show>
         <Show when={runningCount() !== null}>
-          <span class="chip is-quiet">
-            {runningCount()} guest{runningCount() === 1 ? '' : 's'} up
-          </span>
+          <span class="chip is-quiet">{runningCount()} guests up</span>
         </Show>
-        <span class="chip is-quiet">{serviceCount()} services</span>
+        <span class="chip is-quiet">{inventory().services.length} services</span>
         <span class="chip is-locked">
           <LockIcon />
           cloudflare access
@@ -197,23 +218,27 @@ function Dashboard() {
           <div class="section-head">
             <h2>Machines</h2>
             <span class="section-meta">
-              {filteredMachines().length} of {inventory().machines.length}
+              {computers().length} of {inventory().machines.filter((m) => kindOf(m) !== 'lxc').length}
             </span>
           </div>
           <div class="machine-grid">
-            <For each={filteredMachines()}>
-              {(machine) => (
-                <MachineCard
-                  machine={machine}
-                  guest={machine.vmid === undefined ? undefined : guestByVmid().get(machine.vmid)}
-                  host={machine.vmid === undefined ? snapshot()?.host : undefined}
-                  disk={machine.vmid === undefined ? snapshot()?.disks?.[0] : undefined}
-                  online={isOnline(machine)}
-                />
-              )}
-            </For>
+            <For each={computers()}>{renderMachine}</For>
           </div>
         </section>
+
+        <Show when={inventory().machines.some((m) => kindOf(m) === 'lxc')}>
+          <section class="section">
+            <div class="section-head">
+              <h2>Containers</h2>
+              <span class="section-meta">
+                {containers().length} of {inventory().machines.filter((m) => kindOf(m) === 'lxc').length} · lxc
+              </span>
+            </div>
+            <div class="machine-grid">
+              <For each={containers()}>{renderMachine}</For>
+            </div>
+          </section>
+        </Show>
 
         <section class="section">
           <div class="section-head">

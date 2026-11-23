@@ -87,7 +87,9 @@ the first mistake.
 {
   "site": { "title": "homelab", "apex": "example.com" },
   "machines": [
-    { "id": "nas", "name": "nas", "role": "storage", "vmid": 101 }
+    // kind: hypervisor | vm | lxc | device (device = on the network, no agent)
+    { "id": "nas", "name": "nas", "role": "storage", "kind": "vm", "vmid": 101 },
+    { "id": "laptop", "name": "laptop", "role": "workstation", "kind": "device", "icon": "apple" }
   ],
   "services": [
     {
@@ -96,6 +98,7 @@ the first mistake.
       "description": "Media server",
       "category": "Media",           // grouping in the UI
       "machine": "nas",              // links the card to a machine
+      "icon": "jellyfin",            // logo key, see src/lib/logos.ts
       "origin": "http://10.0.0.21:8096",
       "probeUrl": "http://10.0.0.21:8096/health",
       "originTLS": "skip",           // self-signed origin
@@ -110,6 +113,20 @@ the first mistake.
 
 A service with `connect` instead of `origin` does not get a tunnel — it gets a
 connection page (useful for RDP, SSH, VNC where a browser cannot help).
+
+### Presentation
+
+`kind` decides which section a machine lands in: everything that is not `lxc`
+appears under **Machines**, and containers get their own row between machines
+and services. Only Proxmox guests report metrics, so a `device` card shows its
+role and an explicit "no metrics agent" note rather than a row of fake zeroes.
+
+`icon` picks a logo from `src/lib/logos.ts`. A slug with no mark falls back to a
+monogram, which is the honest outcome for software that publishes none. Logos
+are vendored from the community [dashboard-icons](https://github.com/homarr-labs/dashboard-icons)
+set and imported through Vite, so they are served from the dashboard's own
+origin and the page makes no third-party requests. Each mark remains the
+trademark of its project and is used only to identify it.
 
 ### 2. Tunnel and DNS
 

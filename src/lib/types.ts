@@ -5,13 +5,23 @@
 
 export type GuestType = 'qemu' | 'lxc'
 
+/**
+ * How a machine is presented and where its numbers come from:
+ * `hypervisor` is the Proxmox host, `vm` and `lxc` are its guests (live stats
+ * via pvesh), `device` is anything else on the network with no agent.
+ */
+export type MachineKind = 'hypervisor' | 'vm' | 'lxc' | 'device'
+
 export interface Machine {
   /** Stable id; referenced by `Service.machine`. */
   id: string
   name: string
   role?: string
-  /** Proxmox guest id. Absent for the hypervisor itself. */
+  kind?: MachineKind
+  /** Proxmox guest id. Absent for the hypervisor and for bare devices. */
   vmid?: number
+  /** Logo key from `src/lib/logos.ts`. Falls back to a monogram. */
+  icon?: string
   tags?: string[]
 }
 
@@ -26,6 +36,8 @@ export interface Service {
   category: string
   /** `Machine.id` this service runs on. */
   machine: string
+  /** Logo key from `src/lib/logos.ts`. Falls back to a monogram. */
+  icon?: string
   /** Upstream the tunnel proxies to. Never sent to the browser. */
   origin?: string
   /** `skip` sets cloudflared's `noTLSVerify` for self-signed origins. */

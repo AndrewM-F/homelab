@@ -2,6 +2,7 @@ import { Show, type JSX } from 'solid-js'
 import { publicUrl } from '../lib/inventory'
 import type { Inventory, ProbeResult, Service } from '../lib/types'
 import { ArrowOut, TerminalIcon } from './icons'
+import { Logo } from './logo'
 
 interface Props {
   inventory: Inventory
@@ -25,17 +26,19 @@ export function ServiceCard(props: Props): JSX.Element {
   const body = (
     <>
       <header class="service-head">
-        <h3>{props.service.name}</h3>
+        <Logo icon={props.service.icon} name={props.service.name} />
+        <div class="service-title">
+          <h3>{props.service.name}</h3>
+          <Show when={props.service.description}>
+            <p class="service-desc">{props.service.description}</p>
+          </Show>
+        </div>
         <span class="service-go" aria-hidden="true">
           <Show when={!isConnect()} fallback={<TerminalIcon />}>
             <ArrowOut />
           </Show>
         </span>
       </header>
-
-      <Show when={props.service.description}>
-        <p class="service-desc">{props.service.description}</p>
-      </Show>
 
       <footer class="service-foot">
         <span class="service-host">

@@ -34,6 +34,15 @@ function asNumber(value: unknown, path: string, optional = false): number | unde
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 const RESERVED = new Set(['www', 'api', 'metrics', 'admin', 'mail', 'ftp', 'ns1', 'ns2'])
 
+const KINDS = new Set(['hypervisor', 'vm', 'lxc', 'device'])
+
+function parseKind(value: unknown, vmid: unknown, path: string): Machine['kind'] {
+  if (value === undefined || value === null) return vmid === undefined ? 'device' : 'vm'
+  const kind = asString(value, path)!
+  if (!KINDS.has(kind)) fail(path, 'hypervisor, vm, lxc or device', kind)
+  return kind as Machine['kind']
+}
+
 function parseMachine(raw: unknown, index: number): Machine {
   const path = `machines[${index}]`
   if (typeof raw !== 'object' || raw === null) fail(path, 'an object', raw)
@@ -42,7 +51,9 @@ function parseMachine(raw: unknown, index: number): Machine {
     id: asString(m.id, `${path}.id`)!,
     name: asString(m.name, `${path}.name`)!,
     role: asString(m.role, `${path}.role`, true),
+    kind: parseKind(m.kind, m.vmid, `${path}.kind`),
     vmid: asNumber(m.vmid, `${path}.vmid`, true),
+    icon: asString(m.icon, `${path}.icon`, true),
     tags: asStringArray(m.tags, `${path}.tags`),
   }
 }
@@ -82,6 +93,7 @@ function parseService(raw: unknown, index: number): Service {
     description: asString(s.description, `${path}.description`, true),
     category: asString(s.category, `${path}.category`)!,
     machine: asString(s.machine, `${path}.machine`)!,
+    icon: asString(s.icon, `${path}.icon`, true),
     origin: asString(s.origin, `${path}.origin`, true),
     originTLS: originTLS as Service['originTLS'],
     originName: asString(s.originName, `${path}.originName`, true),

@@ -11,7 +11,9 @@
       "role": "hypervisor",
       "tags": [
         "proxmox"
-      ]
+      ],
+      "kind": "hypervisor",
+      "icon": "proxmox"
     },
     {
       "id": "nas",
@@ -20,7 +22,8 @@
       "vmid": 101,
       "tags": [
         "docker"
-      ]
+      ],
+      "kind": "vm"
     },
     {
       "id": "desktop",
@@ -29,7 +32,9 @@
       "vmid": 102,
       "tags": [
         "linux"
-      ]
+      ],
+      "kind": "vm",
+      "icon": "arch-linux"
     },
     {
       "id": "windows",
@@ -38,6 +43,18 @@
       "vmid": 103,
       "tags": [
         "windows"
+      ],
+      "kind": "vm",
+      "icon": "windows-11"
+    },
+    {
+      "id": "laptop",
+      "name": "laptop",
+      "role": "workstation",
+      "kind": "device",
+      "icon": "apple",
+      "tags": [
+        "macos"
       ]
     },
     {
@@ -47,7 +64,9 @@
       "vmid": 110,
       "tags": [
         "lxc"
-      ]
+      ],
+      "kind": "lxc",
+      "icon": "pi-hole"
     },
     {
       "id": "status",
@@ -56,7 +75,9 @@
       "vmid": 111,
       "tags": [
         "lxc"
-      ]
+      ],
+      "kind": "lxc",
+      "icon": "uptime-kuma"
     }
   ],
   "services": [
@@ -70,7 +91,8 @@
       "probeUrl": "http://10.0.0.21:8096/System/Info/Public",
       "tags": [
         "streaming"
-      ]
+      ],
+      "icon": "jellyfin"
     },
     {
       "slug": "requests",
@@ -82,7 +104,8 @@
       "probeUrl": "http://10.0.0.21:5055/api/v1/status",
       "tags": [
         "acquisition"
-      ]
+      ],
+      "icon": "seerr"
     },
     {
       "slug": "movies",
@@ -94,7 +117,8 @@
       "probeUrl": "http://10.0.0.21:7878/ping",
       "tags": [
         "automation"
-      ]
+      ],
+      "icon": "radarr"
     },
     {
       "slug": "series",
@@ -106,7 +130,8 @@
       "probeUrl": "http://10.0.0.21:8989/ping",
       "tags": [
         "automation"
-      ]
+      ],
+      "icon": "sonarr"
     },
     {
       "slug": "dns",
@@ -119,7 +144,8 @@
       "probeUrl": "http://10.0.0.30/admin/",
       "tags": [
         "dns"
-      ]
+      ],
+      "icon": "pi-hole"
     },
     {
       "slug": "status",
@@ -131,7 +157,8 @@
       "probeUrl": "http://10.0.0.31:3001/",
       "tags": [
         "monitoring"
-      ]
+      ],
+      "icon": "uptime-kuma"
     },
     {
       "slug": "hypervisor",
@@ -143,7 +170,8 @@
       "originTLS": "skip",
       "tags": [
         "proxmox"
-      ]
+      ],
+      "icon": "proxmox"
     },
     {
       "slug": "workstation",
@@ -152,7 +180,8 @@
       "category": "Machines",
       "machine": "desktop",
       "origin": "https://10.0.0.22:47990",
-      "originTLS": "skip"
+      "originTLS": "skip",
+      "icon": "sunshine"
     },
     {
       "slug": "windows",
@@ -164,7 +193,8 @@
         "protocol": "rdp",
         "address": "windows.example.com:3389",
         "command": "cloudflared access rdp --hostname windows.example.com --url rdp://localhost:13389"
-      }
+      },
+      "icon": "windows-11"
     }
   ]
 }
