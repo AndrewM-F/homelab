@@ -139,6 +139,11 @@ export interface GuestStat {
   diskSource: 'guest' | 'allocated'
   /** Provisioned size, always known even when usage is not. */
   diskAllocated: number
+  /**
+   * `guest` when the guest reports its own memory use; `resident` when Proxmox
+   * can only report the QEMU process size, which tends towards 100%.
+   */
+  memSource: 'guest' | 'resident'
   uptime: number
 }
 

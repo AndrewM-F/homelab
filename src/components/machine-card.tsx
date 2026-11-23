@@ -110,7 +110,13 @@ export function MachineCard(props: Props): JSX.Element {
                 label="mem"
                 value={sampled() ? memFraction() : 0}
                 display={sampled() ? bytes(memUsed()) : '—'}
-                note={sampled() ? `/ ${bytes(memTotal())}` : undefined}
+                note={
+                  sampled()
+                    ? props.guest?.memSource === 'resident'
+                      ? 'resident, no balloon'
+                      : `/ ${bytes(memTotal())}`
+                    : undefined
+                }
               />
               <Meter
                 label="disk"
@@ -138,7 +144,13 @@ export function MachineCard(props: Props): JSX.Element {
               value={sampled() ? memFraction() : 0}
               center={sampled() ? percent(memFraction()) : '—'}
               label="mem"
-              note={sampled() ? `${bytes(memUsed())} / ${bytes(memTotal())}` : undefined}
+              note={
+                sampled()
+                  ? props.guest?.memSource === 'resident'
+                    ? `resident · ${bytes(memTotal())}`
+                    : `${bytes(memUsed())} / ${bytes(memTotal())}`
+                  : undefined
+              }
             />
             <Gauge
               value={sampled() && diskKnown() ? diskFraction() : 0}

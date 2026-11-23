@@ -169,6 +169,8 @@ function Dashboard() {
     maxdisk: sample.diskTotal,
     diskSource: sample.diskTotal > 0 ? 'guest' : 'allocated',
     diskAllocated: sample.diskTotal,
+    // the probe script measures the host directly, so this is guest-reported
+    memSource: 'guest',
     uptime: sample.uptime,
   })
 

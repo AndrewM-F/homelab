@@ -338,6 +338,44 @@ def machine_stat(entry: dict) -> dict | None:
     return found
 
 
+_balloon_cache: dict[int, tuple[float, bool]] = {}
+
+
+def memory_is_guest_reported(vmid: int, node: str) -> bool:
+    """
+    True when the running VM actually reports its own memory usage.
+
+    Without an *active* balloon device Proxmox reports the QEMU process's
+    resident set, which climbs to the full allocation as the guest touches pages
+    — a Windows VM then looks 100% full while the guest itself is barely a
+    quarter used. Configuring a balloon is not enough: the device only exists
+    after the VM restarts, so ask the running machine.
+    """
+    now = time.time()
+    cached = _balloon_cache.get(vmid)
+    if cached and now - cached[0] < AGENT_TTL:
+        return cached[1]
+
+    active = False
+    pvesh = shutil.which("pvesh")
+    if pvesh:
+        try:
+            out = subprocess.run(
+                [pvesh, "get", f"/nodes/{node}/qemu/{vmid}/status/current", "--output-format", "json"],
+                capture_output=True,
+                text=True,
+                timeout=AGENT_TIMEOUT,
+                check=False,
+            )
+            if out.returncode == 0:
+                active = bool(json.loads(out.stdout or "{}").get("ballooninfo"))
+        except Exception:  # noqa: BLE001
+            active = False
+
+    _balloon_cache[vmid] = (now, active)
+    return active
+
+
 def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]:
     """Live CPU/memory/disk for every VM and container, from the cluster API."""
     pvesh = shutil.which("pvesh")
@@ -401,6 +439,14 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 "maxdisk": total,
                 "diskAllocated": allocated,
                 "diskSource": source,
+                # A stopped guest has no memory to report; its zeros are accurate.
+                "memSource": (
+                    "guest"
+                    if kind == "lxc"
+                    or item.get("status") != "running"
+                    or memory_is_guest_reported(vmid, item.get("node") or os.uname().nodename)
+                    else "resident"
+                ),
                 "uptime": int(item.get("uptime") or 0),
                 "name": item.get("name"),
             }
