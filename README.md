@@ -176,6 +176,12 @@ collector tries three sources and records which one it used (`diskSource`):
 | appliance that cannot run the agent | `df` over SSH, from `machine.diskProbe` |
 | machine that is not a guest at all | a probe script on the host, from `machine.remoteStats` |
 
+Memory works the same way: containers report it, balloooned VMs report it, and a
+VM with **PCIe passthrough** cannot balloon at all — the guest's memory has to
+stay mapped for DMA, so Proxmox falls back to reporting the QEMU process size and
+the VM looks full. Those guests are asked directly through the agent instead
+(`qm guest exec`, cached 60 s), which is the only accurate source left.
+
 The SSH fallback is deliberately narrow. The collector's key is pinned
 server-side to a single read-only command, so it can measure and nothing else:
 

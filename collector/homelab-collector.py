@@ -339,6 +339,7 @@ def machine_stat(entry: dict) -> dict | None:
 
 
 _balloon_cache: dict[int, tuple[float, bool]] = {}
+_mem_cache: dict[int, tuple[float, tuple[int, int] | None]] = {}
 
 
 def memory_is_guest_reported(vmid: int, node: str) -> bool:
@@ -374,6 +375,73 @@ def memory_is_guest_reported(vmid: int, node: str) -> bool:
 
     _balloon_cache[vmid] = (now, active)
     return active
+
+
+def guest_ostype(vmid: int) -> str:
+    try:
+        with open(f"/etc/pve/qemu-server/{vmid}.conf", "r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("ostype:"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def agent_memory(vmid: int) -> tuple[int, int] | None:
+    """
+    Real memory use from the QEMU guest agent, for VMs that cannot balloon.
+
+    Ballooning is incompatible with PCIe passthrough (the guest's memory has to
+    stay mapped for DMA), so a passthrough VM reports its process size instead.
+    The agent can still answer the question directly, which is what this does.
+    """
+    now = time.time()
+    cached = _mem_cache.get(vmid)
+    if cached and now - cached[0] < AGENT_TTL:
+        return cached[1]
+
+    result: tuple[int, int] | None = None
+    qm = shutil.which("qm")
+    if qm:
+        if guest_ostype(vmid).startswith("win"):
+            command = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "$o=Get-CimInstance Win32_OperatingSystem;"
+                " 'total={0} used={1}' -f ([int64]$o.TotalVisibleMemorySize*1024),"
+                " (([int64]$o.TotalVisibleMemorySize-$o.FreePhysicalMemory)*1024)",
+            ]
+        else:
+            command = [
+                "sh",
+                "-c",
+                "awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{print \"total=\" t*1024 \" used=\" (t-a)*1024}' /proc/meminfo",
+            ]
+        try:
+            out = subprocess.run(
+                [qm, "guest", "exec", str(vmid), "--"] + command,
+                capture_output=True,
+                text=True,
+                timeout=AGENT_TIMEOUT + 6,
+                check=False,
+            )
+            if out.returncode == 0:
+                payload = json.loads(out.stdout or "{}")
+                data = str(payload.get("out-data") or "")
+                values = dict(
+                    part.split("=", 1) for part in data.split() if "=" in part
+                )
+                total = int(values.get("total", 0))
+                used = int(values.get("used", 0))
+                if total > 0:
+                    result = (used, total)
+        except Exception:  # noqa: BLE001 - a guest without an agent is expected
+            result = None
+
+    _mem_cache[vmid] = (now, result)
+    return result
 
 
 def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]:
@@ -426,6 +494,23 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 used, total, _mount = measured
                 source = "guest"
 
+        mem_used = int(item.get("mem") or 0)
+        mem_total = int(item.get("maxmem") or 0)
+        # A stopped guest has no memory to report; its zeros are accurate.
+        mem_source = (
+            "guest"
+            if kind == "lxc"
+            or item.get("status") != "running"
+            or memory_is_guest_reported(vmid, item.get("node") or os.uname().nodename)
+            else "resident"
+        )
+        if mem_source == "resident":
+            # No balloon (passthrough VMs cannot have one): ask the agent instead.
+            measured_mem = agent_memory(vmid)
+            if measured_mem:
+                mem_used, mem_total = measured_mem
+                mem_source = "guest"
+
         guests.append(
             {
                 "vmid": vmid,
@@ -433,20 +518,13 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 "status": item.get("status", "unknown"),
                 "cpu": round(float(item.get("cpu") or 0), 4),
                 "maxcpu": int(item.get("maxcpu") or 0),
-                "mem": int(item.get("mem") or 0),
-                "maxmem": int(item.get("maxmem") or 0),
+                "mem": mem_used,
+                "maxmem": mem_total,
                 "disk": used,
                 "maxdisk": total,
                 "diskAllocated": allocated,
                 "diskSource": source,
-                # A stopped guest has no memory to report; its zeros are accurate.
-                "memSource": (
-                    "guest"
-                    if kind == "lxc"
-                    or item.get("status") != "running"
-                    or memory_is_guest_reported(vmid, item.get("node") or os.uname().nodename)
-                    else "resident"
-                ),
+                "memSource": mem_source,
                 "uptime": int(item.get("uptime") or 0),
                 "name": item.get("name"),
             }
