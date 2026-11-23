@@ -80,6 +80,12 @@ function Dashboard() {
     return map
   })
 
+  const machineById = createMemo(() => {
+    const map = new Map<string, Machine>()
+    for (const machine of inventory().machines) map.set(machine.id, machine)
+    return map
+  })
+
   const machineName = createMemo(() => {
     const map = new Map<string, string>()
     for (const machine of inventory().machines) map.set(machine.id, machine.name)
@@ -186,7 +192,7 @@ function Dashboard() {
       <div class="statusline">
         <span class={`chip ${snapshot() ? 'is-live' : 'is-offline'}`}>
           <span class="chip-dot" />
-          {snapshot() ? `sample ${clock(snapshot()!.ts)}` : 'stats offline'}
+          {snapshot() ? `updated ${clock(snapshot()!.ts)}` : 'stats offline'}
         </span>
         <Show when={snapshot()?.host}>
           {(host) => (
@@ -239,10 +245,10 @@ function Dashboard() {
             <div class="section-head">
               <h2>
                 <CubeIcon />
-                Containers
+                LXC Containers
               </h2>
               <span class="section-meta">
-                {containers().length} of {inventory().machines.filter((m) => kindOf(m) === 'lxc').length} · lxc
+                {containers().length} of {inventory().machines.filter((m) => kindOf(m) === 'lxc').length}
               </span>
             </div>
             <div class="machine-grid">
@@ -257,7 +263,7 @@ function Dashboard() {
               <GridIcon />
               Services
             </h2>
-            <span class="section-meta">each on its own subdomain</span>
+            <span class="section-meta">{inventory().services.length} linked</span>
           </div>
 
           <Show
@@ -279,6 +285,10 @@ function Dashboard() {
                           service={service}
                           machineName={machineName().get(service.machine) ?? service.machine}
                           probe={probeBySlug().get(service.slug)}
+                          machineOnline={(() => {
+                            const host = machineById().get(service.machine)
+                            return host ? isOnline(host) : undefined
+                          })()}
                         />
                       )}
                     </For>
@@ -297,7 +307,7 @@ function Dashboard() {
         </span>
         <Show when={snapshot()}>
           <span class="footer-meta">
-            sample age {stats().age !== undefined ? `${stats().age}s` : '—'}
+            refreshed {stats().age !== undefined ? `${stats().age}s` : '—'} ago
           </span>
         </Show>
       </footer>

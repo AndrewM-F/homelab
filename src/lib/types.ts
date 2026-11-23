@@ -76,6 +76,8 @@ export interface Service {
   probeTcp?: { host: string; port: number }
   /** Path appended to the public URL in the UI. */
   path?: string
+  /** Absolute URL the card opens, for services that are not served on a subdomain. */
+  url?: string
   /**
    * Explicit `host[:port]` overrides for the copy menu. Normally derived from
    * `origin` and `probeUrl`; set this when a service only listens on one path
@@ -108,6 +110,8 @@ export const PRIVATE_SERVICE_FIELDS = [
   'originName',
   'originHost',
   'probeUrl',
+  'probeExec',
+  'probeTcp',
 ] as const
 
 export interface GuestStat {

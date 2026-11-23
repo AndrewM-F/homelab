@@ -539,9 +539,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": f"{type(error).__name__}: {error}"}, status=500)
             return
 
-        if path == "/" and self.state.root_connect:
-            entry = self.state.connect.get(self.state.root_connect)
-            if entry:
+        if path == "/":
+            # One hostname per connect page (ubuntu.<apex>, mac.<apex>, …), so
+            # pick by Host rather than always serving the default.
+            host = (self.headers.get("Host") or "").split(":")[0].lower()
+            slug = host.split(".")[0]
+            if slug in self.state.connect:
+                self.send_connect(self.state.connect[slug], slug)
+                return
+            if self.state.root_connect and self.state.root_connect in self.state.connect:
+                entry = self.state.connect[self.state.root_connect]
                 self.send_connect(entry, self.state.root_connect)
                 return
 

@@ -74,10 +74,10 @@ const collectorOrigin = process.env.COLLECTOR_URL
 if (!collectorOrigin) {
   die('set COLLECTOR_URL (the collector host as the tunnel connector sees it) before applying')
 }
-const connectService = inventory.services.find((service) => service.connect)
-if (connectService) {
+// Every connect page gets its own hostname; the collector picks the page by Host.
+for (const service of inventory.services.filter((entry) => entry.connect)) {
   ingress.push({
-    hostname: `${connectService.slug}.${inventory.site.apex}`,
+    hostname: `${service.slug}.${inventory.site.apex}`,
     service: collectorOrigin,
   })
 }

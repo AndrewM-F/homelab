@@ -9,6 +9,8 @@ interface Props {
   service: Service
   machineName: string
   probe?: ProbeResult
+  /** Real running state of the host, used when the service itself has no probe. */
+  machineOnline?: boolean
 }
 
 type Health = 'up' | 'down' | 'unknown'
@@ -19,8 +21,14 @@ function health(probe: ProbeResult | undefined): Health {
 }
 
 export function ServiceCard(props: Props): JSX.Element {
-  const href = () => publicUrl(props.inventory, props.service)
-  const state = () => health(props.probe)
+  // `url` wins when a service lives somewhere other than its own subdomain.
+  const href = () => props.service.url ?? publicUrl(props.inventory, props.service)
+  const state = () => {
+    if (props.probe) return health(props.probe)
+    // No probe of its own (a connect page): fall back to the host's real state.
+    if (props.machineOnline !== undefined) return props.machineOnline ? 'up' : 'down'
+    return 'unknown'
+  }
   const isConnect = () => Boolean(props.service.connect)
 
   const menuItems = (): MenuItem[] => {

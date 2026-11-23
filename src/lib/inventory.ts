@@ -155,6 +155,7 @@ function parseService(raw: unknown, index: number): Service {
     probeExec: parseProbeExec(s.probeExec, `${path}.probeExec`),
     probeTcp: parseProbeTcp(s.probeTcp, `${path}.probeTcp`),
     path: asString(s.path, `${path}.path`, true),
+    url: parseUrl(s.url, `${path}.url`),
     addresses: parseAddresses(s.addresses, `${path}.addresses`),
     connect,
     tags: asStringArray(s.tags, `${path}.tags`),
@@ -195,8 +196,8 @@ export function parseInventory(raw: unknown): Inventory {
     if (!machineIds.has(service.machine)) {
       fail(`services[${service.slug}].machine`, `a known machine id (got "${service.machine}")`, service.machine)
     }
-    if (!service.origin && !service.connect) {
-      fail(`services[${service.slug}]`, 'an origin or a connect block', service)
+    if (!service.origin && !service.connect && !service.url) {
+      fail(`services[${service.slug}]`, 'an origin, a connect block or a url', service)
     }
   }
 

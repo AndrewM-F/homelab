@@ -59,6 +59,7 @@ export function MachineCard(props: Props): JSX.Element {
     if (props.machine.addresses?.lan) {
       items.push({ label: 'LAN', value: props.machine.addresses.lan })
     }
+    if (props.machine.url) items.push({ label: 'URL', value: props.machine.url })
     items.push({
       label: resourceView() === 'gauge' ? 'Show bar meters' : 'Show gauges',
       onSelect: toggleResourceView,
@@ -103,7 +104,7 @@ export function MachineCard(props: Props): JSX.Element {
                 label="cpu"
                 value={sampled() ? cpu() : 0}
                 display={sampled() ? percent(cpu()) : '—'}
-                note={sampled() ? coreLabel() : 'no sample'}
+                note={sampled() ? coreLabel() : 'no data'}
               />
               <Meter
                 label="mem"
@@ -131,7 +132,7 @@ export function MachineCard(props: Props): JSX.Element {
               value={sampled() ? cpu() : 0}
               center={sampled() ? percent(cpu()) : '—'}
               label="cpu"
-              note={sampled() ? coreLabel() : 'no sample'}
+              note={sampled() ? coreLabel() : 'no data'}
             />
             <Gauge
               value={sampled() ? memFraction() : 0}

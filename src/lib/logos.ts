@@ -30,6 +30,7 @@ import seerr from '../assets/logos/seerr.svg?url'
 import sonarr from '../assets/logos/sonarr.svg?url'
 import sunshine from '../assets/logos/sunshine.svg?url'
 import tailscale from '../assets/logos/tailscale.svg?url'
+import ubuntuLinux from '../assets/logos/ubuntu-linux.svg?url'
 import uptimeKuma from '../assets/logos/uptime-kuma.svg?url'
 import vaultwarden from '../assets/logos/vaultwarden.svg?url'
 import windows11 from '../assets/logos/windows-11.svg?url'
@@ -51,6 +52,7 @@ const LOGOS: Record<string, string> = {
   sonarr,
   sunshine,
   tailscale,
+  'ubuntu-linux': ubuntuLinux,
   'uptime-kuma': uptimeKuma,
   vaultwarden,
   'windows-11': windows11,
