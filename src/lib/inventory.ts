@@ -179,7 +179,7 @@ function parseDeploy(raw: unknown): DeployConfig | undefined {
   return {
     worker: asString(deploy.worker, 'deploy.worker', true),
     kvNamespaceId: asString(deploy.kvNamespaceId, 'deploy.kvNamespaceId', true),
-    accountId: asString(deploy.accountId, 'deploy.accountId', false),
+    accountId: asString(deploy.accountId, 'deploy.accountId', true),
   }
 }
 
