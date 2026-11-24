@@ -166,24 +166,43 @@ for (const warning of warnings) console.warn(`      warn: ${warning}`)
 
 // ------------------------------------------------------------------- push
 
-async function cf(argv: string[]): Promise<number> {
-  // `cf` prefers CLOUDFLARE_API_TOKEN over its own login. The deploy token is
-  // scoped to Workers, so strip it here and let cf use the estate session.
+/** `cf` prefers CLOUDFLARE_API_TOKEN over its own login. The deploy token is
+ * scoped to Workers, so strip it here and let cf use the estate session. */
+function cfEnv(): Record<string, string | undefined> {
   const env = { ...process.env }
   delete env.CLOUDFLARE_API_TOKEN
-  const proc = Bun.spawn(['cf', ...argv], { cwd: ROOT, env, stdout: 'inherit', stderr: 'inherit' })
+  return env
+}
+
+async function cf(argv: string[]): Promise<number> {
+  const proc = Bun.spawn(['cf', ...argv], { cwd: ROOT, env: cfEnv(), stdout: 'inherit', stderr: 'inherit' })
   return proc.exited
 }
+
+/** Same, but keeps cf's JSON reply out of the output. */
+async function cfSilent(argv: string[]): Promise<number> {
+  const proc = Bun.spawn(['cf', ...argv], { cwd: ROOT, env: cfEnv(), stdout: 'pipe', stderr: 'pipe' })
+  return proc.exited
+}
+
+// `.cloudflare/` is git-ignored; the value is written there rather than passed
+// on the command line so it stays out of the process table.
+const staged = join(ROOT, '.cloudflare', 'tmp', 'inventory.json')
+mkdirSync(dirname(staged), { recursive: true })
+writeFileSync(staged, JSON.stringify(inventory), { mode: 0o600 })
+
+// `bun run dev` reads the same KV binding as production, backed by a local
+// simulation, so seed that too: otherwise every dev server starts on the
+// bundled example inventory.
+process.stdout.write('      seeding local KV … ')
+const seeded = await cfSilent(['kv', 'keys', 'put', 'inventory', '--namespace-id', kvNamespaceId, '--file', staged, '--local'])
+if (seeded === 0) console.log('ok')
+else console.warn('failed; `bun run dev` will show the example inventory')
 
 if (push) {
   // The inventory lives in KV: it grows past the 5 KiB per-binding secret limit
   // as soon as a homelab has more than a handful of services.
   process.stdout.write('      pushing inventory to KV … ')
-  // `.cloudflare/` is git-ignored; the value is written there rather than
-  // passed on the command line so it stays out of the process table.
-  const staged = join(ROOT, '.cloudflare', 'tmp', 'inventory.json')
-  mkdirSync(dirname(staged), { recursive: true })
-  writeFileSync(staged, JSON.stringify(inventory), { mode: 0o600 })
   const kv = await cf([
     'kv',
     'keys',

@@ -80,7 +80,11 @@ the real addresses; everything derived from it is written to git-ignored files.
 The tracked repository stays generic.
 
 The dev server runs inside workerd (via `@cloudflare/vite-plugin`) with the real
-Worker bindings, so what you see locally is what deploys.
+Worker bindings, so what you see locally is what deploys. `bun run sync` seeds
+the local KV simulation with the same inventory the Worker reads, so the dev
+dashboard shows the real machines rather than the bundled example. `bun run sync` seeds
+the local KV simulation with the same inventory the Worker reads, so the dev
+dashboard shows the real machines rather than the bundled example.
 
 ### 1. Inventory
 
