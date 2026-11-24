@@ -17,6 +17,7 @@ Config: /etc/homelab-collector.json (override with HOMELAB_COLLECTOR_CONFIG)
       "listen": {"host": "0.0.0.0", "port": 9101},
       "interface": "vmbr0",
       "disks": ["/"],
+      "ups": {"name": "cyberpower"},
       "probes": [{"slug": "media", "url": "http://10.0.0.21:8096/"}],
       "connect": [{"slug": "windows", "name": "Windows", "protocol": "rdp",
                    "address": "windows.example.com:3389",
@@ -569,6 +570,54 @@ def disk_stats(mounts: list[str]) -> list[dict]:
     return disks
 
 
+def ups_stats(name: str) -> dict | None:
+    """Read the local NUT daemon. `None` when NUT is absent or not answering.
+
+    `upsc` prints one `key: value` per line; only the handful a card can show
+    without a second call are kept, and the status word is expanded into flags
+    so the UI never has to parse "OB LB" itself.
+    """
+    if not shutil.which("upsc"):
+        return None
+    try:
+        result = subprocess.run(
+            ["upsc", name], capture_output=True, text=True, timeout=3, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+
+    values: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip():
+            values[key.strip()] = value.strip()
+    if "ups.status" not in values:
+        return None
+
+    def number(key: str) -> float | None:
+        try:
+            return float(values[key])
+        except (KeyError, ValueError):
+            return None
+
+    status = values["ups.status"]
+    flags = set(status.split())
+    return {
+        "name": name,
+        "status": status,
+        "onBattery": "OB" in flags,
+        "lowBattery": "LB" in flags,
+        "model": values.get("device.model") or values.get("ups.model"),
+        "manufacturer": values.get("device.mfr") or values.get("ups.mfr"),
+        "charge": number("battery.charge"),
+        "load": number("ups.load"),
+        "runtime": number("battery.runtime"),
+        "voltage": number("input.voltage"),
+    }
+
+
 # ------------------------------------------------------------------ probes
 
 _ssl = ssl.create_default_context()
@@ -650,6 +699,8 @@ class State:
         self.site_title = (config.get("site") or {}).get("title") or "homelab"
         self.interface = config.get("interface") or default_interface()
         self.disks = config.get("disks") or ["/"]
+        # NUT device name to sample; absent means UPS reporting is off.
+        self.ups = (config.get("ups") or {}).get("name")
         self.probes = config.get("probes") or []
         self.probe_exec = config.get("probe_exec") or []
         self.tcp_probes = config.get("tcp_probes") or []
@@ -697,7 +748,7 @@ class State:
             probes += list(self.executor.map(probe_exec, self.probe_exec))
         if self.tcp_probes:
             probes += list(self.executor.map(probe_tcp, self.tcp_probes))
-        return {
+        snapshot = {
             "ts": int(time.time()),
             "host": host_stats(self.interface),
             "guests": guest_stats(warnings, self.disk_probes),
@@ -706,6 +757,12 @@ class State:
             "disks": disk_stats(self.disks),
             "warnings": warnings,
         }
+        # Present only when a NUT device is configured: null then means "asked
+        # and got no answer", which is a state worth showing, while a missing
+        # key means the dashboard has no UPS at all.
+        if self.ups:
+            snapshot["ups"] = ups_stats(self.ups)
+        return snapshot
 
 
 # ------------------------------------------------------------------ server

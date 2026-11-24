@@ -654,6 +654,117 @@ a.machine:hover h3 {
   background: var(--dim);
 }
 
+/* ---------- ups ---------- */
+
+.ups-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 340px);
+  gap: var(--gap);
+}
+
+.ups-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: border-color 0.2s ease;
+}
+
+.ups-card.is-battery {
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.ups-card.is-low {
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.ups-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ups-head .chip {
+  margin-left: auto;
+}
+
+.ups-bolt {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.ups-card.is-battery .ups-bolt {
+  color: var(--warn);
+}
+
+.ups-card.is-low .ups-bolt {
+  color: var(--bad);
+}
+
+.ups-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ups-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ups-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+}
+
+.ups-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.chip.is-mains {
+  color: var(--fg);
+  border-color: rgba(94, 234, 212, 0.28);
+  background: var(--accent-soft);
+}
+
+.chip.is-mains .chip-dot {
+  background: var(--accent);
+}
+
+.chip.is-battery {
+  color: var(--warn);
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.chip.is-battery .chip-dot {
+  background: var(--warn);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.chip.is-low {
+  color: var(--bad);
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.chip.is-low .chip-dot {
+  background: var(--bad);
+  box-shadow: 0 0 8px var(--bad);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
 /* ---------- resource gauges ---------- */
 
 .gauges {

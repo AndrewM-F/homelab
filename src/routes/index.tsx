@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/solid-router'
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
-import { CubeIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon } from '../components/icons'
+import { CubeIcon, BoltIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon } from '../components/icons'
 import { ColumnSwitch } from '../components/column-switch'
 import { MachineCard } from '../components/machine-card'
 import { ServiceCard } from '../components/service-card'
-import { clock, percent } from '../lib/format'
+import { UpsCard } from '../components/ups-card'
+import { clock, duration, percent } from '../lib/format'
 import { applyStoredGridColumns, readStoredGridColumns } from '../lib/grid-columns'
 import { applyStoredResourceView, readStoredResourceView } from '../lib/resource-view'
 import type { GuestStat, HostSample, Inventory, Machine, ProbeResult, Service, StatsResponse } from '../lib/types'
@@ -263,6 +264,21 @@ function Dashboard() {
       </Show>
 
       <main>
+        <Show when={snapshot()?.ups !== undefined}>
+          <section class="section">
+            <div class="section-head">
+              <h2>
+                <BoltIcon />
+                Power
+              </h2>
+              <span class="section-meta">{duration(snapshot()?.ups?.runtime)} runtime</span>
+            </div>
+            <div class="ups-grid">
+              <UpsCard ups={snapshot()?.ups} />
+            </div>
+          </section>
+        </Show>
+
         <section class="section">
           <div class="section-head">
             <h2>
