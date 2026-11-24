@@ -54,10 +54,10 @@ src/
   lib/                    shared types, inventory validation, formatters
   server/                 server functions + Worker binding access
 collector/
-  homelab-collector.py     the collector (runs on the hypervisor)
+  homelab-collector.py    the collector (runs on the hypervisor)
   homelab-collector.service
 scripts/
-  sync.ts                 inventory → Worker secret, .dev.vars, collector config
+  sync.ts                 inventory → .dev.vars, wrangler.jsonc, collector config
   tunnel.ts               inventory → tunnel ingress + DNS records
 inventory.example.json    schema reference with placeholder addresses
 ```
@@ -70,9 +70,14 @@ Requires Bun, a Cloudflare zone, and a host that is always on to run
 ```bash
 bun install
 cp inventory.example.json inventory.local.json   # then edit it
-bun run sync                                     # writes .dev.vars + collector config
+bun run sync                                     # writes .dev.vars, wrangler.jsonc, collector config
 bun run dev                                      # http://localhost:3000
 ```
+
+`inventory.local.json` is the only file that describes your installation. It
+holds the site title and apex domain, the Worker name and KV namespace id, and
+the real addresses; everything derived from it is written to git-ignored files.
+The tracked repository stays generic.
 
 The dev server runs inside workerd (via `@cloudflare/vite-plugin`) with the real
 Worker bindings, so what you see locally is what deploys.
@@ -83,9 +88,18 @@ Worker bindings, so what you see locally is what deploys.
 `src/lib/inventory.ts` validates it and fails the build with a precise path on
 the first mistake.
 
+`site.apex` is the domain the dashboard and every service subdomain live under.
+`deploy` holds the Worker name and the KV namespace that stores the inventory
+(create it once with `wrangler kv namespace create INVENTORY`); both are read by
+`bun run sync` when it generates `wrangler.jsonc`.
+
 ```jsonc
 {
   "site": { "title": "homelab", "apex": "example.com" },
+  "deploy": {
+    "worker": "homelab",                  // the Worker `bun run deploy` pushes to
+    "kvNamespaceId": "<from wrangler kv namespace create INVENTORY>"
+  },
   "machines": [
     // kind: hypervisor | vm | lxc | device (device = on the network, no agent)
     { "id": "nas", "name": "nas", "role": "storage", "kind": "vm", "vmid": 101 },
@@ -149,11 +163,15 @@ one proxied CNAME per hostname. Re-running is safe.
 ### 3. Collector
 
 ```bash
+bun run sync                                   # writes collector/config.json
 scp collector/homelab-collector.py root@<hypervisor>:/usr/local/sbin/
-scp collector/config.json        root@<hypervisor>:/etc/homelab-collector.json
+scp collector/config.json          root@<hypervisor>:/etc/homelab-collector.json
 scp collector/homelab-collector.service root@<hypervisor>:/etc/systemd/system/
 ssh root@<hypervisor> systemctl enable --now homelab-collector
 ```
+
+The collector reads `/etc/homelab-collector.json`; set
+`HOMELAB_COLLECTOR_CONFIG` in its unit to keep the config somewhere else.
 
 It answers `GET /stats` (resource sample + probes), `GET /health`, and
 `GET /connect/<slug>` for non-HTTP services.
@@ -206,7 +224,7 @@ that is on the same network (`remoteStats.jump`), and the key is pinned to that
 one script:
 
 ```
-restrict,command="/Users/user/.homelab-stats.sh" ssh-ed25519 AAAA… homelab-collector-mac
+restrict,command="/Users/<you>/.homelab-stats.sh" ssh-ed25519 AAAA… homelab-collector-mac
 ```
 
 Samples are cached for 30 s, because `top` needs about a second to measure CPU.
@@ -216,11 +234,12 @@ Samples are cached for 30 s, because `top` needs about a second to measure CPU.
 ```bash
 bun run build
 wrangler deploy            # needs CLOUDFLARE_API_TOKEN
-bun run sync --push        # INVENTORY_JSON, STATS_URL and the Access token
+bun run sync --push        # inventory to KV, STATS_URL and the Access token
 ```
 
-Routes for the apex and `www` are declared in `wrangler.jsonc`. The generated
-deploy config is written to `dist/server/wrangler.json`; do not pass
+`bun run sync` generates `wrangler.jsonc` from `site.apex` and `deploy` in the
+local inventory; the file is git-ignored, so never edit it by hand. The build
+writes the deploy config to `dist/server/wrangler.json`; do not pass
 `--config wrangler.jsonc` to `wrangler deploy`.
 
 ### 5. Access
@@ -244,14 +263,15 @@ from the Worker — never ship them to the browser.
 
 ## What is deliberately not here
 
-- **Inventory** — real hostnames, tailnet and LAN addresses, VM ids.
+- **Inventory** — real hostnames, tailnet and LAN addresses, VM ids, apex domain.
+- **Worker name, routes and KV namespace id** — generated into `wrangler.jsonc`.
 - **Tunnel id and ingress table** — lives in Cloudflare.
 - **Access service token, deploy token** — Worker secrets, never in git.
-- **`.dev.vars`** — local bindings.
+- **`.dev.vars` and `wrangler.jsonc`** — generated local bindings and deploy config.
 
 Everything in that list is git-ignored, and `scripts/sync.ts` regenerates the
-derivable parts. The example inventory uses `10.0.0.x` placeholders so a fresh
-clone renders without leaking anything.
+derivable parts. The example inventory uses `10.0.0.x` and `100.64.0.x`
+placeholders so a fresh clone renders without leaking anything.
 
 ### Apps that reject `X-Forwarded-For`
 
@@ -274,9 +294,9 @@ Three jobs, all landing in the hypervisor's `local` storage
 
 | Job | What | When | Size | Keep |
 | --- | --- | --- | --- | --- |
-| `vzdump` (Proxmox job) | containers + zima + ubuntu | Sun 04:00 | ~14 GB | 2 |
-| `pve-config-backup.timer` | `/etc/pve`, network, apt, units | daily 03:30 | 86 KB | 7 |
-| `omarchy-config-backup.timer` | omarchy's config, not its repos | daily 03:45 | 36 MB | 7 |
+| `vzdump` (Proxmox job) | the guests worth rebuilding | weekly | — | 2 |
+| `pve-config-backup.timer` | `/etc/pve`, network, apt, units | daily 03:30 | — | 7 |
+| `omarchy-config-backup.timer` | omarchy's config, not its repos | daily 03:45 | — | 7 |
 
 `pve-config` is the one that makes a rebuild possible at all: VM and container
 definitions live in pmxcfs, so no `vzdump` archive contains them. Restoring on a
@@ -284,21 +304,20 @@ fresh Proxmox is `tar -xf` into `/`.
 
 `omarchy-config` captures `/etc`, dotfiles, `~/.ssh`, and package manifests
 (`pacman -Qqe`, AUR list, enabled units, fonts) — enough to rebuild the
-workstation. Its 88 GB of Projects and 42 GB of `.cache` are excluded as
-reproducible; application profiles under `~/.config` (Claude, Codex, chromium,
-zen, mozilla ≈ 1.5 GB) are excluded as caches in disguise.
+workstation. Large project checkouts and caches are excluded as reproducible,
+as are application profiles under `~/.config` that are caches in disguise.
 
-Deliberately not backed up: **windows11** (games and a Windows install, rebuilt
-by hand) and **omarchy's bulk** (git repos, toolchains, caches). Everything here
-shares one NVMe with the guests it protects, so it covers mistakes and bad
-upgrades, not drive failure.
+Big or trivially rebuilt guests are deliberately skipped, as is omarchy's bulk
+(git repos, toolchains, caches). Keep the backup target on separate storage from
+the guests it protects, or it only covers mistakes and bad upgrades, not drive
+failure.
 
 ## Notes
 
 ### Edge-injected nodes and hydration
 
-Cloudflare injects a hidden anchor as the first child of `<body>` on every
-proxied zone in this account:
+Cloudflare injects a hidden anchor as the first child of `<body>` on proxied
+zones (observed on this setup):
 
 ```html
 <a href="/cdn-cgi/content?id=…" aria-hidden="true" style="display:none"></a>

@@ -4,6 +4,9 @@
     "subtitle": "operations",
     "apex": "example.com"
   },
+  "deploy": {
+    "worker": "homelab"
+  },
   "machines": [
     {
       "id": "hypervisor",

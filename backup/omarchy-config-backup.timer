@@ -1,5 +1,5 @@
 [Unit]
-Description=homelab: daily omarchy configuration backup
+Description=Daily omarchy configuration backup
 
 [Timer]
 OnCalendar=*-*-* 03:45:00

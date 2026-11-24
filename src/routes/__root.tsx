@@ -9,10 +9,12 @@ export const Route = createRootRoute({
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { name: 'color-scheme', content: 'dark' },
       { name: 'robots', content: 'noindex, nofollow' },
-      { title: 'homelab · homelab' },
+      // Portable default; the topbar brand comes from the configured
+      // inventory, so the browser tab stays generic.
+      { title: 'homelab · dashboard' },
       {
         name: 'description',
-        content: 'Private operations dashboard for the homelab homelab.',
+        content: 'Private operations dashboard for a homelab.',
       },
     ],
     links: [

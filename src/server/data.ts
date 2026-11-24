@@ -123,7 +123,9 @@ export function publicInventory(inventory: Inventory): Inventory {
     for (const field of PRIVATE_SERVICE_FIELDS) delete copy[field]
     return copy
   })
-  return { ...inventory, services }
+  // `deploy` holds installation-specific values (worker name, KV id) and must
+  // never reach the browser, so the payload is rebuilt without it.
+  return { site: inventory.site, machines: inventory.machines, services }
 }
 
 async function fetchCollector(url: string): Promise<Snapshot> {

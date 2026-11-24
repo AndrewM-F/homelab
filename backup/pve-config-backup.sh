@@ -1,5 +1,5 @@
 #!/bin/bash
-# homelab: back up the hypervisor's own configuration.
+# Back up the hypervisor's own configuration.
 #
 # VM and container definitions live in /etc/pve, which is pmxcfs — not the root
 # filesystem — so no vzdump archive contains them. If this host's disk died, the

@@ -1,5 +1,5 @@
 #!/bin/bash
-# homelab: back up omarchy's configuration, not its bulk.
+# Back up omarchy's configuration, not its bulk.
 #
 # The workstation holds 168 GB, but almost all of it is git repos, toolchains and
 # caches that can be re-cloned or re-fetched. This captures the part that makes a
@@ -11,15 +11,16 @@
 # Install on omarchy:
 #   install -m 0755 omarchy-config-backup.sh /usr/local/sbin/
 #   install -m 0644 omarchy-config-backup.* /etc/systemd/system/
+#   printf 'REMOTE=root@10.0.0.10\n' > /etc/homelab-backup.env   # your backup host
 #   systemctl daemon-reload && systemctl enable --now omarchy-config-backup.timer
 
 set -euo pipefail
 
-REMOTE=${REMOTE:-root@10.0.0.10}
-KEY=${KEY:-/home/user/.ssh/id_ed25519}
+REMOTE=${REMOTE:?set REMOTE to the backup target, e.g. root@10.0.0.10}
+KEY=${KEY:-$HOME/.ssh/id_ed25519}
 DEST=${DEST:-/var/lib/vz/dump}
 KEEP=${KEEP:-7}
-HOME_DIR=${HOME_DIR:-/home/user}
+HOME_DIR=${HOME_DIR:-$HOME}
 STAMP=$(date +%Y%m%d-%H%M)
 NAME="omarchy-config-$STAMP.tar.zst"
 

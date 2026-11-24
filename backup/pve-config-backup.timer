@@ -1,5 +1,5 @@
 [Unit]
-Description=homelab: daily Proxmox configuration backup
+Description=Daily Proxmox configuration backup
 
 [Timer]
 OnCalendar=*-*-* 03:30:00

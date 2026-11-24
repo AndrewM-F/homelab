@@ -3,8 +3,10 @@ dist/
 .wrangler/
 .cloudflare/
 
-# Local secrets and private inventory. The real homelab addresses, probe URLs
-# and tailnet IPs live only in these files, never in git.
+# Local secrets and private inventory. Site-specific values (apex domain,
+# worker name, KV id, real hostnames and addresses) live only in these files,
+# never in git.
+wrangler.jsonc
 .dev.vars
 .dev.vars.*
 inventory.local.json
@@ -16,3 +18,6 @@ collector/config.json
 .DS_Store
 .idea/
 .vscode/
+
+# Python bytecode from running the collector locally.
+__pycache__/

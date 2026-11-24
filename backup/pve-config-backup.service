@@ -1,5 +1,5 @@
 [Unit]
-Description=homelab: back up Proxmox configuration (/etc/pve)
+Description=Back up Proxmox configuration (/etc/pve)
 
 [Service]
 Type=oneshot

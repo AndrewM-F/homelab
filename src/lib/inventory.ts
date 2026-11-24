@@ -1,4 +1,4 @@
-import type { Addresses, Inventory, Machine, Service } from './types'
+import type { Addresses, DeployConfig, Inventory, Machine, Service } from './types'
 
 class ShapeError extends Error {}
 
@@ -172,6 +172,16 @@ function parseService(raw: unknown, index: number): Service {
   }
 }
 
+function parseDeploy(raw: unknown): DeployConfig | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (typeof raw !== 'object' || Array.isArray(raw)) fail('deploy', 'an object', raw)
+  const deploy = raw as Record<string, unknown>
+  return {
+    worker: asString(deploy.worker, 'deploy.worker', true),
+    kvNamespaceId: asString(deploy.kvNamespaceId, 'deploy.kvNamespaceId', true),
+  }
+}
+
 /**
  * Validates an inventory document. Throws with a precise path on the first
  * problem so a bad `sync` fails loudly instead of shipping a broken dashboard.
@@ -217,6 +227,7 @@ export function parseInventory(raw: unknown): Inventory {
       subtitle: asString(site.subtitle, 'site.subtitle', true),
       apex,
     },
+    deploy: parseDeploy(doc.deploy),
     machines,
     services,
   }

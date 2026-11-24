@@ -3,11 +3,12 @@
  * Publishes the private inventory to the places that need it.
  *
  *   inventory.local.json  →  .dev.vars                 (local `bun run dev`)
+ *                         →  wrangler.jsonc             (worker name, routes, KV binding)
  *                         →  Worker secret  INVENTORY_JSON  (with --push)
  *                         →  collector/config.json        (probes + connect pages)
  *
- * Nothing private is written anywhere tracked by git. `.dev.vars` and
- * `collector/config.json` are both ignored.
+ * Nothing private is written anywhere tracked by git. `.dev.vars`,
+ * `wrangler.jsonc` and `collector/config.json` are all ignored.
  *
  *   bun run sync            validate + write local files
  *   bun run sync --push     also upload the Worker secret
@@ -23,8 +24,9 @@ const ROOT = join(import.meta.dir, '..')
 const LOCAL = join(ROOT, 'inventory.local.json')
 const DEV_VARS = join(ROOT, '.dev.vars')
 const COLLECTOR_CONFIG = join(ROOT, 'collector', 'config.json')
+const WRANGLER_CONFIG = join(ROOT, 'wrangler.jsonc')
 /** Key inside the jump container, pinned server-side to the stats script. */
-const MACHINE_SSH_IDENTITY = process.env.MACHINE_SSH_IDENTITY ?? '/etc/homelab-collector/mac_probe'
+const MACHINE_SSH_IDENTITY = process.env.MACHINE_SSH_IDENTITY ?? '/etc/homelab-collector/ssh_probe'
 
 
 const args = new Set(process.argv.slice(2))
@@ -60,6 +62,35 @@ for (const service of inventory.services) {
   }
 }
 
+// --------------------------------------------------------- deploy config
+
+// Worker name, routes and the KV binding belong to one installation, so the
+// deploy config is generated here instead of being tracked. Point wrangler at
+// a different namespace with KV_NAMESPACE if the inventory omits it.
+const kvNamespaceId = process.env.KV_NAMESPACE ?? inventory.deploy?.kvNamespaceId
+if (!kvNamespaceId) {
+  die(
+    'set deploy.kvNamespaceId in inventory.local.json ' +
+      '(create one with: wrangler kv namespace create INVENTORY)',
+  )
+}
+
+const apex = inventory.site.apex
+const wranglerConfig = {
+  $schema: './node_modules/wrangler/config-schema.json',
+  name: inventory.deploy?.worker ?? 'homelab',
+  main: '@tanstack/solid-start/server-entry',
+  compatibility_date: '2025-11-01',
+  compatibility_flags: ['nodejs_compat'],
+  kv_namespaces: [{ binding: 'INVENTORY', id: kvNamespaceId }],
+  observability: { enabled: true, head_sampling_rate: 1 },
+  routes: [
+    { pattern: `${apex}/*`, zone_name: apex },
+    { pattern: `www.${apex}/*`, zone_name: apex },
+  ],
+}
+writeFileSync(WRANGLER_CONFIG, JSON.stringify(wranglerConfig, null, 2) + '\n', 'utf8')
+
 // ---------------------------------------------------------- local dev env
 
 // Keep an already-configured local collector URL instead of resetting it to
@@ -85,6 +116,7 @@ writeFileSync(DEV_VARS, devVars, 'utf8')
 // ------------------------------------------------------ collector config
 
 const collectorConfig = {
+  site: { title: inventory.site.title },
   listen: { host: '0.0.0.0', port: 9101 },
   interface: 'vmbr0',
   disks: ['/', '/var/lib/vz'],
@@ -142,12 +174,11 @@ const connectHosts = inventory.services.filter((service) => service.connect)
 console.log(`sync: ${inventory.services.length} services across ${inventory.machines.length} machines`)
 console.log(`      ${tunnelHosts.length} tunnel hostnames, ${connectHosts.length} connect pages`)
 console.log(`      wrote ${DEV_VARS.replace(ROOT + '/', '')}`)
+console.log(`      wrote ${WRANGLER_CONFIG.replace(ROOT + '/', '')}`)
 console.log(`      wrote ${COLLECTOR_CONFIG.replace(ROOT + '/', '')}`)
 for (const warning of warnings) console.warn(`      warn: ${warning}`)
 
 // ------------------------------------------------------------------- push
-
-const KV_NAMESPACE = process.env.KV_NAMESPACE ?? '00000000000000000000000000000000'
 
 async function cf(argv: string[]): Promise<number> {
   // `cf` prefers CLOUDFLARE_API_TOKEN over its own login. The deploy token is
@@ -183,7 +214,7 @@ if (push) {
     'put',
     'inventory',
     '--namespace-id',
-    KV_NAMESPACE,
+    kvNamespaceId,
     '--file',
     staged,
   ])

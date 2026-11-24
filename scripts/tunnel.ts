@@ -4,7 +4,7 @@
  *
  * Every service that has an `origin` becomes a tunnel hostname:
  *
- *     jellyfin.example.com  ──▶  http://<tailnet-ip>:8097
+ *     jellyfin.<apex>      ──▶  http://<tailnet-ip>:8097
  *
  * The ingress table lives in Cloudflare (remotely-managed tunnel), so this
  * repository never contains internal addresses. Re-running is safe: the tunnel
@@ -28,7 +28,6 @@ function flag(name: string): string | undefined {
 }
 
 const tunnelId = flag('--tunnel') ?? process.env.TUNNEL_ID
-const zone = flag('--zone') ?? process.env.CLOUDFLARE_ZONE ?? 'example.com'
 
 function die(message: string): never {
   console.error(`tunnel: ${message}`)
@@ -40,6 +39,7 @@ if (!existsSync(join(ROOT, 'inventory.local.json'))) {
 }
 
 const inventory = parseInventory(JSON.parse(readFileSync(join(ROOT, 'inventory.local.json'), 'utf8')))
+const zone = flag('--zone') ?? process.env.CLOUDFLARE_ZONE ?? inventory.site.apex
 if (mode !== 'plan' && !tunnelId) {
   die('pass --tunnel <id> (or set TUNNEL_ID)')
 }

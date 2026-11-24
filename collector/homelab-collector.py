@@ -11,7 +11,7 @@ Runs on the Proxmox host and answers three things over plain HTTP:
 It is never exposed directly to the internet: the Cloudflare Tunnel publishes
 it on one hostname, and Cloudflare Access sits in front of that hostname.
 
-Config: /etc/homelab-collector.json
+Config: /etc/homelab-collector.json (override with HOMELAB_COLLECTOR_CONFIG)
 
     {
       "listen": {"host": "0.0.0.0", "port": 9101},
@@ -624,6 +624,7 @@ def run_probes(entries: list[dict], executor: ThreadPoolExecutor) -> list[dict]:
 class State:
     def __init__(self, config: dict):
         self.config = config
+        self.site_title = (config.get("site") or {}).get("title") or "homelab"
         self.interface = config.get("interface") or default_interface()
         self.disks = config.get("disks") or ["/"]
         self.probes = config.get("probes") or []
@@ -710,7 +711,7 @@ CONNECT_PAGE = """<!doctype html>
           border-radius:999px; font-family:ui-monospace,monospace; font-size:10.5px; color:#5a6772; }}
 </style></head>
 <body><main>
-  <div class="eyebrow">homelab · connect</div>
+  <div class="eyebrow">{site} · connect</div>
   <h1>{name}</h1>
   <p>{description}</p>
   <div class="tag">{protocol} over cloudflare access</div>
@@ -738,6 +739,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def send_connect(self, entry: dict, slug: str) -> None:
         page = CONNECT_PAGE.format(
+            site=html.escape(self.state.site_title),
             name=html.escape(entry.get("name", slug)),
             description=html.escape(entry.get("description", "Connect with the client below.")),
             protocol=html.escape(entry.get("protocol", "tcp")),

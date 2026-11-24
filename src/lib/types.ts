@@ -105,8 +105,20 @@ export interface Inventory {
     subtitle?: string
     apex: string
   }
+  /**
+   * Installation-specific deployment values. Never sent to the browser; set
+   * them only in the untracked local inventory.
+   */
+  deploy?: DeployConfig
   machines: Machine[]
   services: Service[]
+}
+
+export interface DeployConfig {
+  /** Worker name `bun run deploy` pushes to. Defaults to `homelab`. */
+  worker?: string
+  /** KV namespace bound as INVENTORY, created with `wrangler kv namespace create`. */
+  kvNamespaceId?: string
 }
 
 /** Service fields that never leave the Worker. */
