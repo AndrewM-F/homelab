@@ -58,6 +58,14 @@ export function TerminalIcon(props: { size?: number }): JSX.Element {
   )
 }
 
+export function BoltIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 13}px`, height: `${props.size ?? 13}px` }}>
+      <path d="M9.5 1.8 3.8 9h3.4l-.7 5.2L13 7.2H9.4z" />
+    </svg>
+  )
+}
+
 export function ServerIcon(props: { size?: number }): JSX.Element {
   return (
     <svg {...base} style={{ width: `${props.size ?? 13}px`, height: `${props.size ?? 13}px` }}>

@@ -212,6 +212,29 @@ export interface DiskStat {
   total: number
 }
 
+/**
+ * UPS sample read from the local NUT daemon by the collector. `null` on the
+ * snapshot when NUT is not configured or is not answering.
+ */
+export interface UpsStat {
+  /** NUT device name, e.g. "cyberpower". */
+  name: string
+  /** Raw NUT status word, e.g. "OL" on mains, "OB LB" on low battery. */
+  status: string
+  onBattery: boolean
+  lowBattery: boolean
+  model?: string
+  manufacturer?: string
+  /** Battery charge, 0..100. */
+  charge?: number | null
+  /** Load as a percentage of capacity, 0..100. */
+  load?: number | null
+  /** Estimated runtime on battery, seconds. */
+  runtime?: number | null
+  /** Input voltage, volts. */
+  voltage?: number | null
+}
+
 export interface Snapshot {
   /** Unix seconds when the collector produced this sample. */
   ts: number
@@ -221,6 +244,8 @@ export interface Snapshot {
   hosts: HostSample[]
   probes: ProbeResult[]
   disks: DiskStat[]
+  /** UPS state, when the collector is configured with a NUT device. */
+  ups?: UpsStat | null
   /** Set when the collector answered but reported its own trouble. */
   warnings: string[]
 }
