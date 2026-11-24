@@ -46,6 +46,13 @@ export default defineConfig({
     ],
     env: {
       INVENTORY: bindings.kv({ id: kvNamespaceId }),
+      // Declared so local dev reads them from .dev.vars; all four are set as
+      // Worker secrets in production except INVENTORY_JSON, which is the
+      // fallback for a machine with no KV.
+      INVENTORY_JSON: bindings.secret(),
+      STATS_URL: bindings.secret(),
+      CF_ACCESS_CLIENT_ID: bindings.secret(),
+      CF_ACCESS_CLIENT_SECRET: bindings.secret(),
     },
   },
 })
