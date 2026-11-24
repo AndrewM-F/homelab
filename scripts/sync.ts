@@ -3,15 +3,15 @@
  * Publishes the private inventory to the places that need it.
  *
  *   inventory.local.json  →  .dev.vars                 (local `bun run dev`)
- *                         →  wrangler.jsonc             (worker name, routes, KV binding)
- *                         →  Worker secret  INVENTORY_JSON  (with --push)
- *                         →  collector/config.json        (probes + connect pages)
+ *                         →  KV                       (with --push)
+ *                         →  Worker secrets           (with --push)
+ *                         →  collector/config.json    (probes + connect pages)
  *
- * Nothing private is written anywhere tracked by git. `.dev.vars`,
- * `wrangler.jsonc` and `collector/config.json` are all ignored.
+ * Nothing private is written anywhere tracked by git. `.dev.vars` and
+ * `collector/config.json` are both ignored.
  *
  *   bun run sync            validate + write local files
- *   bun run sync --push     also upload the Worker secret
+ *   bun run sync --push     also upload the KV inventory and Worker secrets
  *   bun run sync --install  also copy the collector to the given host
  */
 
@@ -24,7 +24,6 @@ const ROOT = join(import.meta.dir, '..')
 const LOCAL = join(ROOT, 'inventory.local.json')
 const DEV_VARS = join(ROOT, '.dev.vars')
 const COLLECTOR_CONFIG = join(ROOT, 'collector', 'config.json')
-const WRANGLER_CONFIG = join(ROOT, 'wrangler.jsonc')
 /** Key inside the jump container, pinned server-side to the stats script. */
 const MACHINE_SSH_IDENTITY = process.env.MACHINE_SSH_IDENTITY ?? '/etc/homelab-collector/ssh_probe'
 
@@ -38,11 +37,15 @@ function die(message: string): never {
   process.exit(1)
 }
 
-if (!existsSync(LOCAL)) die(`missing ${LOCAL} — copy inventory.example.json and edit it`)
+// The inventory comes from the local file, or from INVENTORY_JSON when CI runs
+// this (the repository never carries the real addresses).
+const inventorySource = existsSync(LOCAL)
+  ? readFileSync(LOCAL, 'utf8')
+  : (process.env.INVENTORY_JSON ?? die(`missing ${LOCAL} — copy inventory.example.json and edit it`))
 
 let inventory
 try {
-  inventory = parseInventory(JSON.parse(readFileSync(LOCAL, 'utf8')))
+  inventory = parseInventory(JSON.parse(inventorySource))
 } catch (error) {
   die(error instanceof Error ? error.message : String(error))
 }
@@ -64,32 +67,16 @@ for (const service of inventory.services) {
 
 // --------------------------------------------------------- deploy config
 
-// Worker name, routes and the KV binding belong to one installation, so the
-// deploy config is generated here instead of being tracked. Point wrangler at
-// a different namespace with KV_NAMESPACE if the inventory omits it.
+// The KV namespace has to come from somewhere private; the Worker name, routes
+// and account are read by cloudflare.config.ts from this same inventory.
 const kvNamespaceId = process.env.KV_NAMESPACE ?? inventory.deploy?.kvNamespaceId
 if (!kvNamespaceId) {
   die(
     'set deploy.kvNamespaceId in inventory.local.json ' +
-      '(create one with: wrangler kv namespace create INVENTORY)',
+      '(create one with: cf kv namespaces create --title INVENTORY)',
   )
 }
-
-const apex = inventory.site.apex
-const wranglerConfig = {
-  $schema: './node_modules/wrangler/config-schema.json',
-  name: inventory.deploy?.worker ?? 'homelab',
-  main: '@tanstack/solid-start/server-entry',
-  compatibility_date: '2025-11-01',
-  compatibility_flags: ['nodejs_compat'],
-  kv_namespaces: [{ binding: 'INVENTORY', id: kvNamespaceId }],
-  observability: { enabled: true, head_sampling_rate: 1 },
-  routes: [
-    { pattern: `${apex}/*`, zone_name: apex },
-    { pattern: `www.${apex}/*`, zone_name: apex },
-  ],
-}
-writeFileSync(WRANGLER_CONFIG, JSON.stringify(wranglerConfig, null, 2) + '\n', 'utf8')
+const workerName = inventory.deploy?.worker ?? 'homelab'
 
 // ---------------------------------------------------------- local dev env
 
@@ -174,7 +161,6 @@ const connectHosts = inventory.services.filter((service) => service.connect)
 console.log(`sync: ${inventory.services.length} services across ${inventory.machines.length} machines`)
 console.log(`      ${tunnelHosts.length} tunnel hostnames, ${connectHosts.length} connect pages`)
 console.log(`      wrote ${DEV_VARS.replace(ROOT + '/', '')}`)
-console.log(`      wrote ${WRANGLER_CONFIG.replace(ROOT + '/', '')}`)
 console.log(`      wrote ${COLLECTOR_CONFIG.replace(ROOT + '/', '')}`)
 for (const warning of warnings) console.warn(`      warn: ${warning}`)
 
@@ -189,23 +175,13 @@ async function cf(argv: string[]): Promise<number> {
   return proc.exited
 }
 
-async function wrangler(argv: string[], stdin?: string): Promise<number> {
-  const proc = Bun.spawn(['bunx', 'wrangler', ...argv], {
-    cwd: ROOT,
-    stdin: stdin ? new Blob([stdin]) : 'ignore',
-    stdout: 'inherit',
-    stderr: 'inherit',
-  })
-  return proc.exited
-}
-
 if (push) {
   // The inventory lives in KV: it grows past the 5 KiB per-binding secret limit
   // as soon as a homelab has more than a handful of services.
   process.stdout.write('      pushing inventory to KV … ')
-  // `.wrangler/` is git-ignored; the value is written there rather than passed
-  // on the command line so it stays out of the process table.
-  const staged = join(ROOT, '.wrangler', 'inventory.json')
+  // `.cloudflare/` is git-ignored; the value is written there rather than
+  // passed on the command line so it stays out of the process table.
+  const staged = join(ROOT, '.cloudflare', 'tmp', 'inventory.json')
   mkdirSync(dirname(staged), { recursive: true })
   writeFileSync(staged, JSON.stringify(inventory), { mode: 0o600 })
   const kv = await cf([
@@ -227,10 +203,20 @@ if (push) {
     ['CF_ACCESS_CLIENT_SECRET', process.env.CF_ACCESS_CLIENT_SECRET ?? ''],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]))
 
-  for (const [name, value] of secrets) {
-    process.stdout.write(`      pushing secret ${name} … `)
-    const code = await wrangler(['secret', 'put', name], value)
-    if (code !== 0) die(`wrangler secret put ${name} failed`)
+  if (secrets.length) {
+    process.stdout.write(`      pushing ${secrets.length} secrets … `)
+    // One request creates a single Worker version carrying all of them, and a
+    // file keeps the values out of the process table.
+    const staged = join(ROOT, '.cloudflare', 'tmp', 'secrets.json')
+    mkdirSync(dirname(staged), { recursive: true })
+    const body = {
+      secrets: Object.fromEntries(
+        secrets.map(([name, value]) => [name, { type: 'secret_text', name, text: value }]),
+      ),
+    }
+    writeFileSync(staged, JSON.stringify(body), { mode: 0o600 })
+    const code = await cf(['workers', 'secrets', 'bulk-edit', '--worker', workerName, '--file', staged])
+    if (code !== 0) die('cf workers secrets bulk-edit failed')
     console.log('ok')
   }
 }

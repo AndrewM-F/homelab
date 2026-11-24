@@ -117,8 +117,10 @@ export interface Inventory {
 export interface DeployConfig {
   /** Worker name `bun run deploy` pushes to. Defaults to `homelab`. */
   worker?: string
-  /** KV namespace bound as INVENTORY, created with `wrangler kv namespace create`. */
+  /** KV namespace bound as INVENTORY, created with `cf kv namespaces create --title INVENTORY`. */
   kvNamespaceId?: string
+  /** Account holding the Worker; cf cannot pick one when the login sees several. */
+  accountId?: string
 }
 
 /** Service fields that never leave the Worker. */

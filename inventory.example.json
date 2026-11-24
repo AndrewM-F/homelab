@@ -5,7 +5,9 @@
     "apex": "example.com"
   },
   "deploy": {
-    "worker": "homelab"
+    "worker": "homelab",
+    "accountId": "0123456789abcdef0123456789abcdef",
+    "kvNamespaceId": "fedcba9876543210fedcba9876543210"
   },
   "machines": [
     {

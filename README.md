@@ -57,7 +57,7 @@ collector/
   homelab-collector.py    the collector (runs on the hypervisor)
   homelab-collector.service
 scripts/
-  sync.ts                 inventory → .dev.vars, wrangler.jsonc, collector config
+  sync.ts                 inventory → .dev.vars, KV, Worker secrets, collector config
   tunnel.ts               inventory → tunnel ingress + DNS records
 inventory.example.json    schema reference with placeholder addresses
 ```
@@ -70,7 +70,7 @@ Requires Bun, a Cloudflare zone, and a host that is always on to run
 ```bash
 bun install
 cp inventory.example.json inventory.local.json   # then edit it
-bun run sync                                     # writes .dev.vars, wrangler.jsonc, collector config
+bun run sync                                     # writes .dev.vars and collector config
 bun run dev                                      # http://localhost:3000
 ```
 
@@ -90,15 +90,16 @@ the first mistake.
 
 `site.apex` is the domain the dashboard and every service subdomain live under.
 `deploy` holds the Worker name and the KV namespace that stores the inventory
-(create it once with `wrangler kv namespace create INVENTORY`); both are read by
-`bun run sync` when it generates `wrangler.jsonc`.
+(create it once with `cf kv namespaces create --title INVENTORY`). The tracked
+`cloudflare.config.ts` reads them from this file at deploy time, so no site
+detail has to live in git.
 
 ```jsonc
 {
   "site": { "title": "homelab", "apex": "example.com" },
   "deploy": {
     "worker": "homelab",                  // the Worker `bun run deploy` pushes to
-    "kvNamespaceId": "<from wrangler kv namespace create INVENTORY>"
+    "kvNamespaceId": "<from cf kv namespaces create --title INVENTORY>"
   },
   "machines": [
     // kind: hypervisor | vm | lxc | device (device = on the network, no agent)
@@ -231,16 +232,63 @@ Samples are cached for 30 s, because `top` needs about a second to measure CPU.
 
 ### 4. Worker
 
+Deploys run on Cloudflare, not from a laptop: the `homelab` Worker is connected
+to this repository, so a push to `main` builds and ships it. The build runs
+`bun run build`; the deploy runs `bun run deploy:prebuilt`, which uploads the
+Build Output that build produced. Nothing on a developer machine needs a
+deploy token.
+
+For a one-off from a checkout, `cf` does the same thing locally:
+
 ```bash
-bun run build
-wrangler deploy            # needs CLOUDFLARE_API_TOKEN
+bun run deploy             # cf deploy: build + upload in one step
 bun run sync --push        # inventory to KV, STATS_URL and the Access token
 ```
 
-`bun run sync` generates `wrangler.jsonc` from `site.apex` and `deploy` in the
-local inventory; the file is git-ignored, so never edit it by hand. The build
-writes the deploy config to `dist/server/wrangler.json`; do not pass
-`--config wrangler.jsonc` to `wrangler deploy`.
+`cloudflare.config.ts` is tracked and generic: it reads `site.apex`, the Worker
+name and the KV namespace id from `inventory.local.json` when that file exists,
+and falls back to placeholders so a fresh clone still builds. The CI build has
+no inventory file and passes those values as build-time variables instead:
+
+| Variable | Example |
+| --- | --- |
+| `SITE_APEX` | `example.com` |
+| `WORKER_NAME` | `homelab` |
+| `INVENTORY_KV_ID` | the namespace id from `deploy.kvNamespaceId` |
+| `CLOUDFLARE_ACCOUNT_ID` | the account holding the Worker |
+
+The connection itself is one `cf` call; `script-tag` is the Worker's immutable
+tag, not its name:
+
+```bash
+cf workers scripts search --name homelab    # → id, which is the tag
+cf builds workers create <tag> \
+  --git-repository-provider-type github \
+  --git-repository-provider-account-id <github-user-id> \
+  --git-repository-provider-account-name <github-user> \
+  --git-repository-repo-id <github-repo-id> \
+  --git-repository-repo-name <repo> \
+  --git-repository-branch main \
+  --production-settings-build-command "bun run build" \
+  --production-settings-deploy-command "bun run deploy:prebuilt" \
+  --production-settings-build-token-uuid <build-token-uuid> \
+  --production-settings-environment-variables @env.json \
+  --previews-enabled false
+```
+
+`cf builds workers get <tag>` prints the current settings and
+`cf builds tokens list` shows the build tokens a repository may use.
+
+`cf` is the Cloudflare CLI used throughout this repository. Do not add wrangler
+commands, scripts or dependencies back:
+
+| Instead of | Use |
+| --- | --- |
+| `wrangler deploy` | `bun run deploy` (`cf deploy`) |
+| `wrangler kv namespace create` | `cf kv namespaces create --title INVENTORY` |
+| `wrangler kv key put` | `cf kv keys put --namespace-id <id> --file <path>` |
+| `wrangler secret put` | `cf workers secrets bulk-edit` (what `bun run sync --push` uses) |
+| `wrangler tail` | `cf observability tail` |
 
 ### 5. Access
 
@@ -259,15 +307,15 @@ from the Worker — never ship them to the browser.
 1. Add an entry to `inventory.local.json`.
 2. `bun run sync && bun run tunnel apply --tunnel <id>`
 3. If the collector changed: re-copy `collector/config.json` and restart it.
-4. If the dashboard code changed: `bun run deploy`.
+4. If the dashboard code changed: push to `main`; Cloudflare builds and deploys it.
 
 ## What is deliberately not here
 
 - **Inventory** — real hostnames, tailnet and LAN addresses, VM ids, apex domain.
-- **Worker name, routes and KV namespace id** — generated into `wrangler.jsonc`.
+- **Worker name, routes and KV namespace id** — read from the inventory at deploy time.
 - **Tunnel id and ingress table** — lives in Cloudflare.
 - **Access service token, deploy token** — Worker secrets, never in git.
-- **`.dev.vars` and `wrangler.jsonc`** — generated local bindings and deploy config.
+- **`.dev.vars`** — generated local bindings.
 
 Everything in that list is git-ignored, and `scripts/sync.ts` regenerates the
 derivable parts. The example inventory uses `10.0.0.x` and `100.64.0.x`

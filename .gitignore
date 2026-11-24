@@ -1,12 +1,10 @@
 node_modules/
 dist/
-.wrangler/
 .cloudflare/
 
 # Local secrets and private inventory. Site-specific values (apex domain,
 # worker name, KV id, real hostnames and addresses) live only in these files,
 # never in git.
-wrangler.jsonc
 .dev.vars
 .dev.vars.*
 inventory.local.json

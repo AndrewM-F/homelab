@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "deploy": "vite build && wrangler deploy",
+    "deploy": "cf deploy",
+    "deploy:prebuilt": "cf deploy --prebuilt",
     "sync": "bun run scripts/sync.ts",
     "tunnel": "bun run scripts/tunnel.ts"
   },
@@ -18,11 +19,11 @@
     "solid-js": "^1.9.20"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.70.1",
+    "@cloudflare/vite-plugin": "^2.0.0-rc.0",
     "@cloudflare/workers-types": "^4.20251123.0",
+    "cf": "^1.0.0-rc.4",
     "typescript": "^5.9.3",
     "vite": "^8.0.0",
-    "vite-plugin-solid": "^2.11.17",
-    "wrangler": "^4.167.0"
+    "vite-plugin-solid": "^2.11.17"
   }
 }
