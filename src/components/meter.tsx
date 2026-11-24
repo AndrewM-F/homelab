@@ -8,11 +8,6 @@ export function Meter(props: {
   display: string
   /** Optional secondary note, e.g. total capacity. */
   note?: string
-  /**
-   * Overrides the traffic-light colouring. Utilisation is bad when high, but
-   * some values (battery charge) are bad when low, so the caller decides.
-   */
-  tone?: 'ok' | 'warn' | 'bad'
 }): JSX.Element {
   return (
     <div class="meter">
@@ -27,7 +22,7 @@ export function Meter(props: {
       </div>
       <div class="meter-track">
         <div
-          class={`meter-fill is-${props.tone ?? severity(props.value)}`}
+          class={`meter-fill is-${severity(props.value)}`}
           style={{ width: `${Math.min(100, Math.max(0, props.value * 100))}%` }}
         />
       </div>

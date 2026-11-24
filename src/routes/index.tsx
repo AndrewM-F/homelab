@@ -1,10 +1,9 @@
 import { createFileRoute } from '@tanstack/solid-router'
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
-import { CubeIcon, BoltIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon } from '../components/icons'
+import { CubeIcon, BatteryIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon } from '../components/icons'
 import { ColumnSwitch } from '../components/column-switch'
 import { MachineCard } from '../components/machine-card'
 import { ServiceCard } from '../components/service-card'
-import { UpsCard } from '../components/ups-card'
 import { clock, duration, percent } from '../lib/format'
 import { applyStoredGridColumns, readStoredGridColumns } from '../lib/grid-columns'
 import { applyStoredResourceView, readStoredResourceView } from '../lib/resource-view'
@@ -147,6 +146,37 @@ function Dashboard() {
     return snap.guests.filter((guest) => guest.status === 'running').length
   })
 
+  // The UPS is one line in the status bar: charge, load, and the rest behind a
+  // title. `undefined` means no UPS is configured; `null` means it went quiet.
+  const ups = () => snapshot()?.ups
+  const upsState = () => {
+    const sample = ups()
+    if (!sample) return 'unknown'
+    if (sample.lowBattery) return 'low'
+    if (sample.onBattery) return 'battery'
+    return 'mains'
+  }
+  const chargeText = () => {
+    const charge = ups()?.charge
+    return charge == null ? '—' : `${Math.round(charge)}%`
+  }
+  const loadText = () => {
+    const load = ups()?.load
+    return load == null ? '—' : `${Math.round(load)}%`
+  }
+  const upsTitle = () => {
+    const sample = ups()
+    if (!sample) return 'UPS configured, but NUT is not answering'
+    return [
+      [sample.manufacturer, sample.model].filter(Boolean).join(' ') || sample.name,
+      sample.lowBattery ? 'low battery' : sample.onBattery ? 'on battery' : 'on mains',
+      `${duration(sample.runtime)} runtime`,
+      sample.voltage != null ? `${Math.round(sample.voltage)} V in` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+
   /** `undefined` for machines with no metrics agent, so the dot stays neutral. */
   const isOnline = (machine: Machine): boolean | undefined => {
     // No sample at all means unknown, not down.
@@ -240,6 +270,13 @@ function Dashboard() {
             </span>
           )}
         </Show>
+        <Show when={ups() !== undefined}>
+          <span class={`chip is-${upsState()}`} title={upsTitle()}>
+            <BatteryIcon level={(ups()?.charge ?? 0) / 100} />
+            {chargeText()}
+            <span class="chip-sub">· load {loadText()}</span>
+          </span>
+        </Show>
         <Show when={runningCount() !== null}>
           <span class="chip is-quiet">{runningCount()} guests up</span>
         </Show>
@@ -264,21 +301,6 @@ function Dashboard() {
       </Show>
 
       <main>
-        <Show when={snapshot()?.ups !== undefined}>
-          <section class="section">
-            <div class="section-head">
-              <h2>
-                <BoltIcon />
-                Power
-              </h2>
-              <span class="section-meta">{duration(snapshot()?.ups?.runtime)} runtime</span>
-            </div>
-            <div class="ups-grid">
-              <UpsCard ups={snapshot()?.ups} />
-            </div>
-          </section>
-        </Show>
-
         <section class="section">
           <div class="section-head">
             <h2>

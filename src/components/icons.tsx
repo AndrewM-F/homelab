@@ -1,4 +1,4 @@
-import type { JSX } from 'solid-js'
+import { Show, type JSX } from 'solid-js'
 
 const base = {
   width: '1em',
@@ -58,10 +58,20 @@ export function TerminalIcon(props: { size?: number }): JSX.Element {
   )
 }
 
-export function BoltIcon(props: { size?: number }): JSX.Element {
+/**
+ * Battery gauge for the status line. `level` is 0..1 and drives the fill only;
+ * the colour comes from the chip's state class, so one icon serves mains,
+ * battery and low-battery without a second variant.
+ */
+export function BatteryIcon(props: { size?: number; level?: number }): JSX.Element {
+  const width = () => 8.6 * Math.min(1, Math.max(0, props.level ?? 1))
   return (
     <svg {...base} style={{ width: `${props.size ?? 13}px`, height: `${props.size ?? 13}px` }}>
-      <path d="M9.5 1.8 3.8 9h3.4l-.7 5.2L13 7.2H9.4z" />
+      <rect x="1.6" y="4.2" width="11" height="7.6" rx="1.8" />
+      <path d="M14.2 6.5v3" />
+      <Show when={width() > 0.4}>
+        <rect x="3" y="5.7" width={width()} height="4.6" rx="1.1" fill="currentColor" stroke="none" />
+      </Show>
     </svg>
   )
 }
