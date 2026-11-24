@@ -44,6 +44,29 @@ machine and container, plus a health probe for each service.
 - **Cloudflare Access** with one policy for the owner and one for a service
   token, so the Worker can reach the collector without a human session.
 
+## Infrastructure
+
+The inventory describes what the dashboard renders; this is where each role
+runs. Names stay generic on purpose — addresses and VMIDs live only in
+`inventory.local.json`.
+
+| Guest | Kind | Role | Shown under |
+| --- | --- | --- | --- |
+| hypervisor | host | Proxmox VE, runs the collector | Machines |
+| workstation | VM | daily-driver desktop | Machines |
+| storage | VM | NAS and media | Machines |
+| windows | VM | Windows build target, native runner | Machines |
+| laptop | device | macOS build target, native runner | Machines |
+| dns | LXC | Pi-hole | LXC Containers |
+| tunnel | LXC | Tailscale, the tailnet entry point | LXC Containers |
+| uptime | LXC | Uptime Kuma | LXC Containers |
+| secrets | LXC | Vaultwarden | LXC Containers |
+| gitlab | LXC | GitLab runners: Linux testing and qualification | LXC Containers |
+| circleci | LXC | CircleCI runners: Linux release builds | LXC Containers |
+
+Both CI containers are unprivileged, run their own Docker daemon, and hold no
+release credentials — the GitLab one tests, the CircleCI one builds and ships.
+
 ## Layout
 
 ```
