@@ -304,6 +304,20 @@ cf builds workers create <tag> \
 `cf builds workers get <tag>` prints the current settings and
 `cf builds tokens list` shows the build tokens a repository may use.
 
+A build token is its own credential: `cf user tokens create` makes the API token
+the build deploys with, and `cf builds tokens create` wraps it for the build
+system. It needs only these permission groups:
+
+| Permission group | Scope | Why |
+| --- | --- | --- |
+| Workers Scripts Write, Read | account | upload the Worker and its version |
+| Workers KV Storage Read | account | validate the `INVENTORY` binding |
+| Zone Read, Workers Routes Write | the site's zone | attach the `triggers` routes |
+
+`--build-token-secret` takes the **value** of the API token it wraps, so capture
+that value when creating it — Cloudflare shows it once. Keep the two tokens out
+of each other's way: one build token per Worker.
+
 `cf` is the Cloudflare CLI used throughout this repository. Do not add wrangler
 commands, scripts or dependencies back:
 
