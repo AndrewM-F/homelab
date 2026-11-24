@@ -18,6 +18,8 @@
 import apple from '../assets/logos/apple.svg?url'
 import archLinux from '../assets/logos/arch-linux.svg?url'
 import bazarr from '../assets/logos/bazarr.svg?url'
+import circleci from '../assets/logos/circleci.svg?url'
+import gitlab from '../assets/logos/gitlab.svg?url'
 import jellyfin from '../assets/logos/jellyfin.svg?url'
 import omarchy from '../assets/logos/omarchy.svg?url'
 import piHole from '../assets/logos/pi-hole.svg?url'
@@ -40,6 +42,8 @@ const LOGOS: Record<string, string> = {
   apple,
   'arch-linux': archLinux,
   bazarr,
+  circleci,
+  gitlab,
   jellyfin,
   omarchy,
   'pi-hole': piHole,
