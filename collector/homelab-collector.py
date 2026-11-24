@@ -60,6 +60,8 @@ _ssh_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
 # Machines that are not Proxmox guests report through their own probe script.
 MACHINE_TTL = 30.0
 _machine_cache: dict[str, tuple[float, dict | None]] = {}
+# Last reported problem per machine, so the journal records a change, not a poll.
+_machine_state: dict[str, str | None] = {}
 
 # ---------------------------------------------------------------- sampling
 
@@ -270,6 +272,18 @@ def ssh_disk(vmid: int, probe: dict) -> tuple[int, int, str] | None:
     return found
 
 
+def machine_note(machine_id: str, problem: str | None) -> None:
+    """Journal a machine that stops or resumes reading, only when that changes."""
+    previous = _machine_state.get(machine_id)
+    if problem == previous:
+        return
+    _machine_state[machine_id] = problem
+    if problem:
+        print(f"collector: machine {machine_id}: {problem}", file=sys.stderr, flush=True)
+    elif previous:
+        print(f"collector: machine {machine_id}: reading again", file=sys.stderr, flush=True)
+
+
 def machine_stat(entry: dict) -> dict | None:
     """
     Resource sample for a machine that is not a Proxmox guest.
@@ -284,6 +298,7 @@ def machine_stat(entry: dict) -> dict | None:
         return cached[1]
 
     found: dict | None = None
+    problem: str | None = None
     ssh = entry.get("ssh")
     identity = entry.get("identity")
     if ssh and identity:
@@ -331,9 +346,17 @@ def machine_stat(entry: dict) -> dict | None:
                         "diskTotal": int(values.get("disk_total", 0)),
                         "uptime": int(values.get("uptime", 0)),
                     }
-        except Exception:  # noqa: BLE001 - an unreachable machine is not fatal
-            found = None
+                else:
+                    problem = "probe script printed no mem_total"
+            else:
+                detail = next((line.strip() for line in out.stderr.splitlines() if line.strip()), "")
+                problem = f"ssh exited {out.returncode}" + (f": {detail}" if detail else "")
+        except Exception as error:  # noqa: BLE001 - an unreachable machine is not fatal
+            problem = f"{type(error).__name__}: {error}"
+    else:
+        problem = "needs both ssh and identity in the collector config"
 
+    machine_note(machine_id, problem)
     _machine_cache[machine_id] = (now, found)
     return found
 

@@ -230,6 +230,31 @@ restrict,command="/Users/<you>/.homelab-stats.sh" ssh-ed25519 AAAA… homelab-co
 
 Samples are cached for 30 s, because `top` needs about a second to measure CPU.
 
+Two keys have to line up, and both failures are silent in the dashboard — the
+machine simply stops appearing:
+
+1. The `authorized_keys` entry above must be the public half of
+   `/etc/homelab-collector/ssh_probe` on the hypervisor. `ssh-keygen -lf` both
+   and compare.
+2. With `remoteStats.jump` the SSH client runs **inside** that container
+   (`pct exec <jump> -- ssh …`), so the private key must exist there too, not
+   only on the hypervisor:
+
+```bash
+ssh root@<hypervisor> '
+  pct exec <jump> -- install -d -m 0755 /etc/homelab-collector
+  pct push <jump> /etc/homelab-collector/ssh_probe /etc/homelab-collector/ssh_probe \
+    --perms 600 --user root --group root'
+```
+
+That copy lives in the container's rootfs, so it is lost if the container is
+rebuilt — re-run the commands after rebuilding the jump container. The collector
+now writes one line to its journal when a machine stops or resumes reading:
+
+```bash
+journalctl -u homelab-collector | grep 'machine mb-pro'
+```
+
 ### 4. Worker
 
 Deploys run on Cloudflare, not from a laptop: the `homelab` Worker is connected
