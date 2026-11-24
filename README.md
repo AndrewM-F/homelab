@@ -307,6 +307,11 @@ fresh Proxmox is `tar -xf` into `/`.
 workstation. Large project checkouts and caches are excluded as reproducible,
 as are application profiles under `~/.config` that are caches in disguise.
 
+The timer runs as a system service, so its target and paths live in
+`/etc/homelab-backup.env` (`REMOTE`, and `KEY`/`HOME_DIR` when the service has no
+login home); the unit fails loudly if `REMOTE` is missing rather than guessing
+an address.
+
 Big or trivially rebuilt guests are deliberately skipped, as is omarchy's bulk
 (git repos, toolchains, caches). Keep the backup target on separate storage from
 the guests it protects, or it only covers mistakes and bad upgrades, not drive

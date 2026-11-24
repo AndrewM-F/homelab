@@ -11,7 +11,8 @@
 # Install on omarchy:
 #   install -m 0755 omarchy-config-backup.sh /usr/local/sbin/
 #   install -m 0644 omarchy-config-backup.* /etc/systemd/system/
-#   printf 'REMOTE=root@10.0.0.10\n' > /etc/homelab-backup.env   # your backup host
+#   printf 'REMOTE=root@10.0.0.10\nKEY=/home/<you>/.ssh/id_ed25519\nHOME_DIR=/home/<you>\n' \
+#     > /etc/homelab-backup.env
 #   systemctl daemon-reload && systemctl enable --now omarchy-config-backup.timer
 
 set -euo pipefail

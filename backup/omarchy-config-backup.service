@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-# REMOTE (and optional KEY/DEST/KEEP) live here, not in the script.
+# system services have no HOME, so set it before the script's defaults apply.
+Environment=HOME=/root
+# REMOTE, KEY and HOME_DIR belong here, not in the script.
 EnvironmentFile=-/etc/homelab-backup.env
 ExecStart=/usr/local/sbin/omarchy-config-backup.sh
