@@ -270,13 +270,13 @@ function Dashboard() {
               Machines
             </h2>
             <div class="section-tools">
-              <ColumnSwitch />
+              <ColumnSwitch section="machines" />
               <span class="section-meta">
                 {computers().length} of {inventory().machines.filter((m) => kindOf(m) !== 'lxc').length}
               </span>
             </div>
           </div>
-          <div class="machine-grid">
+          <div class="machine-grid" data-grid="machines">
             <For each={computers()}>{renderMachine}</For>
           </div>
         </section>
@@ -289,13 +289,13 @@ function Dashboard() {
                 LXC Containers
               </h2>
               <div class="section-tools">
-                <ColumnSwitch />
+                <ColumnSwitch section="containers" />
                 <span class="section-meta">
                   {containers().length} of {inventory().machines.filter((m) => kindOf(m) === 'lxc').length}
                 </span>
               </div>
             </div>
-            <div class="machine-grid">
+            <div class="machine-grid" data-grid="containers">
               <For each={containers()}>{renderMachine}</For>
             </div>
           </section>
@@ -308,7 +308,7 @@ function Dashboard() {
               Services
             </h2>
             <div class="section-tools">
-              <ColumnSwitch />
+              <ColumnSwitch section="services" />
               <span class="section-meta">{inventory().services.length} linked</span>
             </div>
           </div>
@@ -324,7 +324,7 @@ function Dashboard() {
                     <span>{group.name}</span>
                     <span class="group-count">{group.services.length}</span>
                   </h3>
-                  <div class="service-grid">
+                  <div class="service-grid" data-grid="services">
                     <For each={group.services}>
                       {(service) => (
                         <ServiceCard

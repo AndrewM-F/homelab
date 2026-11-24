@@ -440,11 +440,23 @@ kbd {
 /* ---------- machines ---------- */
 
 /*
- * Column count: `--cols` sets the ideal track width and the max() floor is what
- * narrows the layout when that many will not fit. Each grid fits
- * floor((width + gap) / (track + gap)) tracks, so a chosen 4 holds down to
- * ~1080px, 3 down to ~820px and 2 down to ~555px.
+ * Column count, per section: `--cols-<section>` holds that section's choice and
+ * each grid copies it into `--cols`, which sets the ideal track width. The
+ * max() floor narrows the layout when that many will not fit, so a chosen 4
+ * holds down to ~1080px, 3 to ~820px and 2 to ~555px.
  */
+[data-grid='machines'] {
+  --cols: var(--cols-machines, 3);
+}
+
+[data-grid='containers'] {
+  --cols: var(--cols-containers, 3);
+}
+
+[data-grid='services'] {
+  --cols: var(--cols-services, 3);
+}
+
 .machine-grid {
   display: grid;
   grid-template-columns: repeat(

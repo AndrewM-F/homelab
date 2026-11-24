@@ -1,7 +1,7 @@
 import { For, type JSX } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import { ColumnsFourIcon, ColumnsThreeIcon, ColumnsTwoIcon } from './icons'
-import { gridColumns, setGridColumnsPreference, type GridColumns } from '../lib/grid-columns'
+import { gridColumns, setGridColumnsPreference, type GridColumns, type GridSection } from '../lib/grid-columns'
 
 interface Option {
   value: GridColumns
@@ -16,21 +16,27 @@ const OPTIONS: Option[] = [
   { value: 2, label: '2 columns', icon: ColumnsTwoIcon },
 ]
 
+const SECTION_LABEL: Record<GridSection, string> = {
+  machines: 'Machine',
+  containers: 'Container',
+  services: 'Service',
+}
+
 /**
- * One shared preference, shown in every section head. A click in any of them
- * moves the grids everywhere and is remembered for the next visit.
+ * Column count for one section's grid. Each section keeps its own, so machines
+ * can be three wide while services are four.
  */
-export function ColumnSwitch(): JSX.Element {
+export function ColumnSwitch(props: { section: GridSection }): JSX.Element {
   return (
-    <div class="column-switch" role="group" aria-label="Columns per row">
+    <div class="column-switch" role="group" aria-label={`${SECTION_LABEL[props.section]} columns`}>
       <For each={OPTIONS}>
         {(option) => (
           <button
             type="button"
-            aria-pressed={gridColumns() === option.value}
+            aria-pressed={gridColumns(props.section) === option.value}
             aria-label={option.label}
             title={option.label}
-            onClick={() => setGridColumnsPreference(option.value)}
+            onClick={() => setGridColumnsPreference(props.section, option.value)}
           >
             <Dynamic component={option.icon} />
           </button>
