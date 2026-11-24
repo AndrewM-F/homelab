@@ -1,5 +1,6 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/solid-router'
 import { HydrationScript } from 'solid-js/web'
+import { GRID_COLUMNS_BOOT } from '../lib/grid-columns'
 import appStyles from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -30,6 +31,8 @@ function RootDocument(props: { children: import('solid-js').JSX.Element }) {
     <html lang="en">
       <head>
         <HydrationScript />
+        {/* Before the stylesheet paints: a stored column count must not flash the default. */}
+        <script innerHTML={GRID_COLUMNS_BOOT} />
         <HeadContent />
       </head>
       <body>

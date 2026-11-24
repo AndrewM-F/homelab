@@ -135,3 +135,36 @@ export function UploadIcon(props: { size?: number }): JSX.Element {
     </svg>
   )
 }
+
+/** The column switches: one framed layout per count, so the dividers are the only difference. */
+const columns = {
+  ...base,
+  'stroke-width': 1.3,
+}
+
+export function ColumnsFourIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...columns} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>
+      <rect x="1.85" y="3.1" width="12.3" height="9.8" rx="1.7" />
+      <path d="M4.925 3.1v9.8M8 3.1v9.8M11.075 3.1v9.8" />
+    </svg>
+  )
+}
+
+export function ColumnsThreeIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...columns} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>
+      <rect x="1.85" y="3.1" width="12.3" height="9.8" rx="1.7" />
+      <path d="M5.95 3.1v9.8M10.05 3.1v9.8" />
+    </svg>
+  )
+}
+
+export function ColumnsTwoIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...columns} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>
+      <rect x="1.85" y="3.1" width="12.3" height="9.8" rx="1.7" />
+      <path d="M8 3.1v9.8" />
+    </svg>
+  )
+}

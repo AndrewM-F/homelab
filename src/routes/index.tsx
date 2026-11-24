@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/solid-router'
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import { CubeIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon } from '../components/icons'
+import { ColumnSwitch } from '../components/column-switch'
 import { MachineCard } from '../components/machine-card'
 import { ServiceCard } from '../components/service-card'
 import { clock, percent } from '../lib/format'
+import { applyStoredGridColumns, readStoredGridColumns } from '../lib/grid-columns'
 import { applyStoredResourceView, readStoredResourceView } from '../lib/resource-view'
 import type { GuestStat, HostSample, Inventory, Machine, ProbeResult, Service, StatsResponse } from '../lib/types'
 import { fetchDashboard, fetchStats } from '../server/api'
@@ -44,8 +46,10 @@ function Dashboard() {
 
   onMount(() => {
     // Read after mount: doing it during the first render would produce markup
-    // the server render cannot match.
+    // the server render cannot match. The column count is painted earlier, by
+    // the boot script in <head>, so only the switch state settles here.
     applyStoredResourceView(readStoredResourceView())
+    applyStoredGridColumns(readStoredGridColumns())
 
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refresh()
@@ -265,9 +269,12 @@ function Dashboard() {
               <ServerIcon />
               Machines
             </h2>
-            <span class="section-meta">
-              {computers().length} of {inventory().machines.filter((m) => kindOf(m) !== 'lxc').length}
-            </span>
+            <div class="section-tools">
+              <ColumnSwitch />
+              <span class="section-meta">
+                {computers().length} of {inventory().machines.filter((m) => kindOf(m) !== 'lxc').length}
+              </span>
+            </div>
           </div>
           <div class="machine-grid">
             <For each={computers()}>{renderMachine}</For>
@@ -281,9 +288,12 @@ function Dashboard() {
                 <CubeIcon />
                 LXC Containers
               </h2>
-              <span class="section-meta">
-                {containers().length} of {inventory().machines.filter((m) => kindOf(m) === 'lxc').length}
-              </span>
+              <div class="section-tools">
+                <ColumnSwitch />
+                <span class="section-meta">
+                  {containers().length} of {inventory().machines.filter((m) => kindOf(m) === 'lxc').length}
+                </span>
+              </div>
             </div>
             <div class="machine-grid">
               <For each={containers()}>{renderMachine}</For>
@@ -297,7 +307,10 @@ function Dashboard() {
               <GridIcon />
               Services
             </h2>
-            <span class="section-meta">{inventory().services.length} linked</span>
+            <div class="section-tools">
+              <ColumnSwitch />
+              <span class="section-meta">{inventory().services.length} linked</span>
+            </div>
           </div>
 
           <Show
