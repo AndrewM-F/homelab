@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "homelab-dashboard",
+      "name": "homelab",
       "dependencies": {
         "@tanstack/solid-router": "^1.170.43",
         "@tanstack/solid-start": "^1.169.7",

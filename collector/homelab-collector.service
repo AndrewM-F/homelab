@@ -1,6 +1,6 @@
 [Unit]
 Description=homelab stats collector (Proxmox host resource + probe API)
-Documentation=https://github.com/AndrewM-F/homelab-dashboard
+Documentation=https://github.com/AndrewM-F/homelab
 After=network-online.target pve-cluster.service
 Wants=network-online.target
 
