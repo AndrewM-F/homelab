@@ -174,6 +174,9 @@ export interface HostStat {
   memUsed: number
   /** Reclaimable page cache included in `memUsed`; 0 when unknown. */
   memCache?: number
+  /** Root volume usage: provisioned size with the unwritable remainder counted. */
+  disk?: number
+  diskTotal?: number
   memTotal: number
   swapUsed: number
   swapTotal: number

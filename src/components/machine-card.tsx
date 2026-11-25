@@ -26,8 +26,10 @@ export function MachineCard(props: Props): JSX.Element {
   const cpu = () => (props.guest ? props.guest.cpu : (props.host?.cpu ?? 0))
   const memUsed = () => (props.guest ? props.guest.mem : (props.host?.memUsed ?? 0))
   const memTotal = () => (props.guest ? props.guest.maxmem : (props.host?.memTotal ?? 0))
-  const diskUsed = () => (props.guest ? props.guest.disk : (props.disk?.used ?? 0))
-  const diskTotal = () => (props.guest ? props.guest.maxdisk : (props.disk?.total ?? 0))
+  const diskUsed = () =>
+    props.guest ? props.guest.disk : (props.disk?.used ?? props.host?.disk ?? 0)
+  const diskTotal = () =>
+    props.guest ? props.guest.maxdisk : (props.disk?.total ?? props.host?.diskTotal ?? 0)
   const diskAllocated = () => (props.guest ? props.guest.diskAllocated : (props.disk?.total ?? 0))
   const uptime = () => (props.guest ? props.guest.uptime : (props.host?.uptime ?? 0))
   const cores = () => props.guest?.maxcpu ?? props.host?.cores ?? 0

@@ -190,6 +190,34 @@ def installed_memory(fallback: int) -> int:
     return _installed_memory_cache
 
 
+def host_disk() -> tuple[int, int]:
+    """
+    (used, provisioned) for the hypervisor's root volume, in bytes.
+
+    The filesystem is a little smaller than the volume it sits on, and the
+    difference is already spent, so used is provisioned minus what is still
+    writable — the same rule the VMs, containers and the Mac follow.
+    """
+    provisioned = 0
+    try:
+        source = subprocess.run(["findmnt", "-no", "SOURCE", "/"], capture_output=True, text=True, timeout=5)
+        device = source.stdout.strip()
+        if device:
+            size = subprocess.run(["blockdev", "--getsize64", device], capture_output=True, text=True, timeout=5)
+            provisioned = int(size.stdout.strip() or 0)
+    except Exception:  # noqa: BLE001 - a container without blockdev is fine
+        provisioned = 0
+    try:
+        stat = os.statvfs("/")
+        free = stat.f_bavail * stat.f_frsize
+        total = stat.f_blocks * stat.f_frsize
+    except OSError:
+        return 0, 0
+    if provisioned < total:
+        provisioned = total
+    return max(0, provisioned - free), provisioned
+
+
 def host_stats(interface: str) -> dict:
     cores = os.cpu_count() or 1
     try:
@@ -197,6 +225,7 @@ def host_stats(interface: str) -> dict:
     except OSError:
         load = (0.0, 0.0, 0.0)
     used, total, swap_used, swap_total, cache = memory()
+    disk_used, disk_total = host_disk()
     # Measure against the installed DIMMs, not MemTotal: the kernel and firmware
     # reservations are real memory the host cannot hand out.
     installed = installed_memory(total)
@@ -212,6 +241,8 @@ def host_stats(interface: str) -> dict:
         "memUsed": used,
         "memTotal": total,
         "memCache": cache,
+        "disk": disk_used,
+        "diskTotal": disk_total,
         "swapUsed": swap_used,
         "swapTotal": swap_total,
         "uptime": uptime(),
