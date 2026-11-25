@@ -142,6 +142,8 @@ export interface GuestStat {
   cpu: number
   maxcpu: number
   mem: number
+  /** Reclaimable page cache included in `mem`; 0 when unknown. */
+  memCache?: number
   maxmem: number
   disk: number
   maxdisk: number
@@ -168,6 +170,8 @@ export interface HostStat {
   /** Utilisation 0..1 derived from load average over cores. */
   cpu: number
   memUsed: number
+  /** Reclaimable page cache included in `memUsed`; 0 when unknown. */
+  memCache?: number
   memTotal: number
   swapUsed: number
   swapTotal: number

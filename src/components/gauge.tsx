@@ -1,4 +1,4 @@
-import type { JSX } from 'solid-js'
+import { Show, type JSX } from 'solid-js'
 import { severity } from '../lib/format'
 
 const RADIUS = 26
@@ -8,8 +8,10 @@ const CENTER = 32
 const ARC = Math.PI * RADIUS
 
 interface Props {
-  /** 0..1 */
+  /** 0..1 — the part that is really in use. */
   value: number
+  /** 0..1 — reclaimable page cache, drawn as an inner band after `value`. */
+  inner?: number
   /** Text inside the arc, e.g. "29%". */
   center: string
   label: string
@@ -23,6 +25,12 @@ interface Props {
 export function Gauge(props: Props): JSX.Element {
   const clamped = () => Math.min(1, Math.max(0, Number.isFinite(props.value) ? props.value : 0))
   const offset = () => ARC * (1 - clamped())
+  // The cache band sits just inside the main arc and starts where it ends, so the
+  // two together read as "resident", while the colour still follows real use.
+  const inner = () => Math.min(1 - clamped(), Math.max(0, Number.isFinite(props.inner ?? 0) ? (props.inner as number) : 0))
+  const INNER_RADIUS = RADIUS - STROKE - 1.5
+  const INNER_ARC = Math.PI * INNER_RADIUS
+  const innerPath = `M ${CENTER - INNER_RADIUS} ${CENTER} A ${INNER_RADIUS} ${INNER_RADIUS} 0 0 1 ${CENTER + INNER_RADIUS} ${CENTER}`
 
   return (
     <div class="gauge" title={`${props.label} ${props.center}${props.note ? ` · ${props.note}` : ''}`}>
@@ -43,6 +51,17 @@ export function Gauge(props: Props): JSX.Element {
           stroke-dasharray={`${ARC} ${ARC}`}
           stroke-dashoffset={offset()}
         />
+        <Show when={inner() > 0.001}>
+          <path
+            class="gauge-cache"
+            d={innerPath}
+            fill="none"
+            stroke-width={2.5}
+            stroke-linecap="butt"
+            stroke-dasharray={`${INNER_ARC * inner()} ${INNER_ARC}`}
+            stroke-dashoffset={-INNER_ARC * clamped()}
+          />
+        </Show>
         <text class="gauge-center" x={CENTER} y={CENTER - 4} text-anchor="middle">
           {props.center}
         </text>
