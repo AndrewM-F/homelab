@@ -19,5 +19,7 @@ vm_stat | awk '
   /^Pages occupied by compressor/ { gsub(/\./,"",$5); cmp=$5 }
   END { if (ps=="") ps=16384; printf "mem_used=%d\n", (act-pur+wir+cmp)*ps }'
 
-# Disk: the data volume, not the sealed read-only system snapshot
-df -k /System/Volumes/Data | awk 'NR==2 {printf "disk_total=%d\ndisk_used=%d\n", $2*1024, $3*1024}'
+# Disk: df's "used" excludes the sealed system snapshot and anything else sharing
+# the APFS container, so measure used as total minus available instead: what the
+# card then shows is the space that is genuinely still writable.
+df -k /System/Volumes/Data | awk 'NR==2 {printf "disk_total=%d\ndisk_used=%d\n", $2*1024, ($2-$4)*1024}'

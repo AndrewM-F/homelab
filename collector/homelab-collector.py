@@ -151,6 +151,45 @@ def uptime() -> int:
         return 0
 
 
+_installed_memory_cache: int | None = None
+
+
+def installed_memory(fallback: int) -> int:
+    """
+    RAM physically installed, in bytes.
+
+    MemTotal excludes what firmware and the kernel reserve, so a 96 GiB machine
+    reports 93 GiB and its card implies memory that was never there. The installed
+    figure is read once from SMBIOS and the reserved part is counted as used.
+    """
+    global _installed_memory_cache
+    if _installed_memory_cache:
+        return _installed_memory_cache
+    total = 0
+    tool = shutil.which("dmidecode")
+    if tool:
+        try:
+            out = subprocess.run(
+                [tool, "-t", "17"], capture_output=True, text=True, timeout=15, check=False
+            )
+            for line in out.stdout.splitlines():
+                line = line.strip()
+                if not line.startswith("Size:"):
+                    continue
+                parts = line.split(":", 1)[1].split()
+                if len(parts) < 2 or not parts[0].isdigit():
+                    continue
+                size, unit = int(parts[0]), parts[1].upper()
+                if unit.startswith("GB"):
+                    total += size * 1024**3
+                elif unit.startswith("MB"):
+                    total += size * 1024**2
+        except Exception:  # noqa: BLE001 - a machine without SMBIOS is fine
+            total = 0
+    _installed_memory_cache = total if total >= fallback else fallback
+    return _installed_memory_cache
+
+
 def host_stats(interface: str) -> dict:
     cores = os.cpu_count() or 1
     try:
@@ -158,6 +197,12 @@ def host_stats(interface: str) -> dict:
     except OSError:
         load = (0.0, 0.0, 0.0)
     used, total, swap_used, swap_total, cache = memory()
+    # Measure against the installed DIMMs, not MemTotal: the kernel and firmware
+    # reservations are real memory the host cannot hand out.
+    installed = installed_memory(total)
+    if installed > total:
+        used = max(0, installed - max(0, total - used))
+        total = installed
     net = network()
     return {
         "name": os.uname().nodename,
