@@ -47,7 +47,9 @@ export function clock(ts: number | undefined | null): string {
 
 /** Clamps a 0..1 utilisation into the traffic-light banding used by the meters. */
 export function severity(fraction: number): 'ok' | 'warn' | 'bad' {
-  if (fraction >= 0.9) return 'bad'
+  // Proxmox runs hot by design — page cache, ZFS ARC and guests that keep their
+  // share resident — so 90% is a normal reading, not a fault. Red starts above it.
+  if (fraction > 0.91) return 'bad'
   if (fraction >= 0.75) return 'warn'
   return 'ok'
 }

@@ -437,8 +437,13 @@ def agent_memory(vmid: int) -> tuple[int, int, int] | None:
                 "-NoProfile",
                 "-Command",
                 "$o=Get-CimInstance Win32_OperatingSystem;"
-                " 'total={0} used={1}' -f ([int64]$o.TotalVisibleMemorySize*1024),"
-                " (([int64]$o.TotalVisibleMemorySize-$o.FreePhysicalMemory)*1024)",
+                "$m=Get-CimInstance Win32_PerfRawData_PerfOS_Memory;"
+                " $t=[int64]$o.TotalVisibleMemorySize*1024;"
+                " $a=[int64]$m.AvailableMBytes*1MB;"
+                # FreePhysicalMemory already counts the standby list, so the cache
+                # figure has to come from the standby lists themselves.
+                " $c=[int64]$m.StandbyCacheNormalPriorityBytes+[int64]$m.StandbyCacheReserveBytes+[int64]$m.StandbyCacheCoreBytes;"
+                " 'total={0} used={1} cache={2}' -f $t, ($t-$a), ([Math]::Min($c, $a))",
             ]
         else:
             command = [
