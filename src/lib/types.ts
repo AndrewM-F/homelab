@@ -205,8 +205,14 @@ export interface HostStat {
   name: string
   cores: number
   load: [number, number, number]
-  /** Utilisation 0..1 derived from load average over cores. */
+  /** Busy CPU fraction from /proc/stat, 0..1. Load is only a first-tick fallback. */
   cpu: number
+  /** Fraction of the sample window spent waiting on I/O, 0..1. */
+  iowait?: number
+  /** Fraction of the sample window stolen by a hypervisor, 0..1. */
+  steal?: number
+  /** Linux PSI I/O pressure, as fractions of wall-clock time. */
+  ioPressure?: { some: number; full: number }
   /** The LVM thin pool used for guest disks, when this is a Proxmox host. */
   pool?: PoolStat
   memUsed: number

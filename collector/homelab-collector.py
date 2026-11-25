@@ -83,6 +83,8 @@ _pool_cache: tuple[float, dict | None] | None = None
 
 _net_lock = threading.Lock()
 _net_sample = {"ts": 0.0, "rx": 0, "tx": 0, "rx_rate": 0.0, "tx_rate": 0.0}
+_cpu_lock = threading.Lock()
+_cpu_sample = {"busy": 0.0, "iowait": 0.0, "steal": 0.0, "total": 0}
 
 
 def read(path: str) -> str:
@@ -137,6 +139,72 @@ def sample_network(interface: str) -> None:
 def network() -> dict:
     with _net_lock:
         return dict(_net_sample)
+
+
+def read_cpu_times() -> tuple[int, int, int, int]:
+    """Total, idle, iowait and steal ticks from the kernel's aggregate line."""
+    try:
+        fields = [int(value) for value in read("/proc/stat").splitlines()[0].split()[1:]]
+        user, nice, system, idle, iowait, irq, softirq, steal = (fields + [0] * 8)[:8]
+        total = user + nice + system + idle + iowait + irq + softirq + steal
+        return total, idle, iowait, steal
+    except (OSError, IndexError, ValueError):
+        return 0, 0, 0, 0
+
+
+def sample_cpu() -> None:
+    """Busy CPU time from the kernel's counters, sampled like the network rates."""
+    previous = None
+    while True:
+        total, idle, iowait, steal = read_cpu_times()
+        with _cpu_lock:
+            if previous is not None and total > previous[0]:
+                elapsed = total - previous[0]
+                delta_idle = idle - previous[1]
+                delta_iowait = iowait - previous[2]
+                delta_steal = steal - previous[3]
+                # Busy is real CPU work: idle, iowait and steal are not.
+                _cpu_sample.update(
+                    busy=round(
+                        max(
+                            0.0,
+                            min(
+                                1.0,
+                                (elapsed - delta_idle - delta_iowait - delta_steal) / elapsed,
+                            ),
+                        ),
+                        4,
+                    ),
+                    iowait=round(max(0.0, min(1.0, delta_iowait / elapsed)), 4),
+                    steal=round(max(0.0, min(1.0, delta_steal / elapsed)), 4),
+                    total=elapsed,
+                )
+        previous = (total, idle, iowait, steal)
+        time.sleep(SAMPLE_SECONDS)
+
+
+def cpu_usage() -> dict:
+    with _cpu_lock:
+        return dict(_cpu_sample)
+
+
+def io_pressure() -> dict | None:
+    """Linux PSI I/O pressure, as fractions of wall-clock time, when present."""
+    try:
+        lines = read("/proc/pressure/io").splitlines()
+    except OSError:
+        return None
+    values: dict[str, float] = {}
+    for line in lines:
+        kind, _, rest = line.partition(" ")
+        if kind not in ("some", "full"):
+            continue
+        fields = dict(part.split("=", 1) for part in rest.split() if "=" in part)
+        try:
+            values[kind] = round(float(fields.get("avg10", 0)) / 100.0, 4)
+        except ValueError:
+            continue
+    return values or None
 
 
 def memory() -> tuple[int, int, int, int, int]:
@@ -326,11 +394,17 @@ def host_stats(interface: str) -> dict:
         used = max(0, installed - max(0, total - used))
         total = installed
     net = network()
+    cpu = cpu_usage()
     return {
         "name": os.uname().nodename,
         "cores": cores,
         "load": [round(load[0], 2), round(load[1], 2), round(load[2], 2)],
-        "cpu": round(min(1.0, load[0] / cores), 4),
+        # Real busy time once the sampler has a window; load is only a first-tick
+        # fallback, not the same measurement (it also counts disk wait).
+        "cpu": cpu["busy"] if cpu["total"] > 0 else round(min(1.0, load[0] / cores), 4),
+        "iowait": cpu["iowait"],
+        "steal": cpu["steal"],
+        "ioPressure": io_pressure(),
         "memUsed": used,
         "memTotal": total,
         "memCache": cache,
@@ -1519,6 +1593,7 @@ def main() -> None:
     host = listen.get("host", "0.0.0.0")
     port = int(listen.get("port", 9101))
 
+    threading.Thread(target=sample_cpu, daemon=True).start()
     threading.Thread(target=sample_network, args=(state.interface,), daemon=True).start()
     # Collect on a fixed cadence so /stats answers from cache and a slow probe
     # cannot drag a request past the dashboard's timeout.

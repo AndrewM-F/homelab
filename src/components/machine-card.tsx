@@ -94,10 +94,21 @@ export function MachineCard(props: Props): JSX.Element {
     return usingPool() ? `${percent(poolCommittedFraction())} committed` : diskNote()
   }
 
-  const cpuTitle = () =>
-    props.host
-      ? `cpu ${percent(cpu())} · ${coreLabel()} · load average, includes I/O wait`
-      : undefined
+  const cpuTitle = () => {
+    const host = props.host
+    if (!host) return undefined
+    const parts = [
+      `${percent(host.cpu)} busy`,
+      coreLabel(),
+      `load ${host.load[0]}`,
+      host.iowait != null ? `${percent(host.iowait)} iowait` : null,
+      host.steal != null && host.steal > 0 ? `${percent(host.steal)} steal` : null,
+      host.ioPressure
+        ? `io pressure ${percent(host.ioPressure.some)} (${percent(host.ioPressure.full)} full)`
+        : null,
+    ].filter(Boolean)
+    return `cpu ${parts.join(' · ')}`
+  }
 
   const poolTitle = () => {
     const p = pool()

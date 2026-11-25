@@ -210,6 +210,14 @@ an SSH check, a distant host) cannot drag a request past the dashboard's timeout
 — which is exactly what used to happen when one probe pointed at
 `login.tailscale.com` and took 1.4 s of every call.
 
+#### CPU
+
+The hypervisor's CPU figure is `/proc/stat` busy time: idle, iowait and steal
+are subtracted, so a storage stall does not read as CPU work. Load average is a
+different measurement — it counts tasks in uninterruptible disk wait too — and
+stays in the card's tooltip alongside iowait, steal and Linux pressure stall
+information (PSI) for I/O.
+
 #### Where disk numbers come from
 
 Proxmox reports usage for containers but only *provisioned size* for VMs, so the
