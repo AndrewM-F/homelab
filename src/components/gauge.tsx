@@ -41,15 +41,6 @@ export function Gauge(props: Props): JSX.Element {
           stroke-width={STROKE}
           stroke-linecap="round"
         />
-        <path
-          class={`gauge-value is-${severity(clamped())}`}
-          d={`M ${CENTER - RADIUS} ${CENTER} A ${RADIUS} ${RADIUS} 0 0 1 ${CENTER + RADIUS} ${CENTER}`}
-          fill="none"
-          stroke-width={STROKE}
-          stroke-linecap="round"
-          stroke-dasharray={`${ARC} ${ARC}`}
-          stroke-dashoffset={offset()}
-        />
         <Show when={inner() > 0.001}>
           <path
             class="gauge-cache"
@@ -61,6 +52,15 @@ export function Gauge(props: Props): JSX.Element {
             stroke-dashoffset={-ARC * clamped()}
           />
         </Show>
+        <path
+          class={`gauge-value is-${severity(clamped())}`}
+          d={`M ${CENTER - RADIUS} ${CENTER} A ${RADIUS} ${RADIUS} 0 0 1 ${CENTER + RADIUS} ${CENTER}`}
+          fill="none"
+          stroke-width={STROKE}
+          stroke-linecap="round"
+          stroke-dasharray={`${ARC} ${ARC}`}
+          stroke-dashoffset={offset()}
+        />
         <text class="gauge-center" x={CENTER} y={CENTER - 4} text-anchor="middle">
           {props.center}
         </text>
