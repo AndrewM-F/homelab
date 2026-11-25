@@ -164,6 +164,16 @@ export function GpuIcon(props: { size?: number }): JSX.Element {
   )
 }
 
+export function DiskIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>
+      <rect x="2" y="3" width="12" height="10" rx="1.6" />
+      <path d="M2 9h12" />
+      <path d="M4.5 11h.01M6.5 11h.01" />
+    </svg>
+  )
+}
+
 /** The column switches: one framed layout per count, so the dividers are the only difference. */
 const columns = {
   ...base,

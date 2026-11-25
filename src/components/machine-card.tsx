@@ -4,7 +4,7 @@ import { resourceView, toggleResourceView } from '../lib/resource-view'
 import type { GpuStat, GuestStat, HostStat, Machine } from '../lib/types'
 import { CardMenu, type MenuItem } from './card-menu'
 import { Gauge } from './gauge'
-import { GpuIcon } from './icons'
+import { DiskIcon, GpuIcon } from './icons'
 import { Logo } from './logo'
 import { Inline, Meter } from './meter'
 
@@ -81,6 +81,13 @@ export function MachineCard(props: Props): JSX.Element {
     if (!gpu.memTotal) return undefined
     const total = bytes(gpu.memTotal, 0)
     return gpu.memUsed == null ? total : `${bytes(gpu.memUsed).split(' ')[0]}/${total}`
+  }
+
+  // A mount path such as /media/Media becomes "Media" in the footer; the full
+  // path stays in the tooltip.
+  const diskLabel = (label: string) => {
+    const parts = label.split(/[\\/]/).filter(Boolean)
+    return parts[parts.length - 1] ?? label
   }
 
   const menuItems = (): MenuItem[] => {
@@ -202,29 +209,37 @@ export function MachineCard(props: Props): JSX.Element {
                 label: 'up',
                 value: props.online === false ? 'stopped' : sampled() ? duration(uptime()) : '—',
               },
-              ...(props.guest?.diskExtra
-                ? [
-                    {
-                      label: '',
-                      value: `${props.guest.diskExtra.label} ${bytes(props.guest.diskExtra.total)}`,
-                    },
-                  ]
-                : []),
               ...(props.machine.tags?.length
                 ? [{ label: '', value: props.machine.tags.join(' · '), class: 'machine-tags' }]
                 : []),
             ]}
           />
-          <Show when={props.guest?.gpu}>
-            {(gpu) => (
-              <span class="gpu" title={gpuTitle(gpu())}>
-                <GpuIcon />
-                <span class="gpu-name">{gpuLabel(gpu().name)}</span>
-                <Show when={gpuMemory(gpu())}>
-                  {(mem) => <span class="gpu-mem">{mem()}</span>}
-                </Show>
-              </span>
-            )}
+          <Show when={props.guest?.gpu || props.guest?.diskExtra}>
+            <div class="foot-tags">
+              <Show when={props.guest?.gpu}>
+                {(gpu) => (
+                  <span class="foot-tag" title={gpuTitle(gpu())}>
+                    <GpuIcon />
+                    <span class="foot-tag-name">{gpuLabel(gpu().name)}</span>
+                    <Show when={gpuMemory(gpu())}>
+                      {(mem) => <span class="foot-tag-mem">{mem()}</span>}
+                    </Show>
+                  </span>
+                )}
+              </Show>
+              <Show when={props.guest?.diskExtra}>
+                {(disk) => (
+                  <span
+                    class="foot-tag"
+                    title={`${disk().label} · ${bytes(disk().used)} of ${bytes(disk().total)} used`}
+                  >
+                    <DiskIcon />
+                    <span class="foot-tag-name">{diskLabel(disk().label)}</span>
+                    <span class="foot-tag-mem">{bytes(disk().total)}</span>
+                  </span>
+                )}
+              </Show>
+            </div>
           </Show>
         </footer>
       </Show>

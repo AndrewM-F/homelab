@@ -808,10 +808,10 @@ a.machine:hover h3 {
     font-size: 22px;
   }
 
-  /* Keep the footer on one line: in the densest grid the GPU chip wins over
-     the machine tags, which repeat what the card header already says. The
+  /* Keep the footer on one line: in the densest grid the GPU/storage chip wins
+     over the machine tags, which repeat what the card header already says. The
      "up" label is redundant with the status dot, so the value gets its space. */
-  .machine-foot:has(.gpu) .machine-tags {
+  .machine-foot:has(.foot-tag) .machine-tags {
     display: none;
   }
 
@@ -930,32 +930,41 @@ a.machine:hover h3 {
   color: var(--muted);
 }
 
-.gpu {
+.foot-tags {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.foot-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  margin-left: auto;
   padding: 0 5px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.035);
   color: var(--dim);
+  white-space: nowrap;
 }
 
-.gpu svg {
+.foot-tag svg {
   flex: none;
   color: var(--muted);
 }
 
-.gpu-name {
+.foot-tag-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.gpu-mem {
+.foot-tag-mem {
   flex: none;
   padding-left: 4px;
   border-left: 1px solid var(--line);
