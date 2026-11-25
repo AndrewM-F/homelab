@@ -31,12 +31,14 @@ export function Meter(props: {
 }
 
 /** Compact inline stat used in card footers. */
-export function Inline(props: { items: { label: string; value: string; title?: string }[] }): JSX.Element {
+export function Inline(props: {
+  items: { label: string; value: string; title?: string; class?: string }[]
+}): JSX.Element {
   return (
     <div class="inline-stats">
       <For each={props.items}>
         {(item) => (
-          <span class="inline-stat" title={item.title}>
+          <span class={`inline-stat${item.class ? ` ${item.class}` : ''}`} title={item.title}>
             <span class="inline-stat-label">{item.label}</span>
             <span class="inline-stat-value">{item.value}</span>
           </span>

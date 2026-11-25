@@ -72,6 +72,17 @@ export function MachineCard(props: Props): JSX.Element {
     return `${gpu.name} — ${mode}${address}${mem}`
   }
 
+  // The footer has one line at every column width, so the chip uses a compact
+  // label and "2.4 MB / 16 GB" becomes "2.4/16 GB". The title keeps the detail.
+  const gpuLabel = (name: string) =>
+    name.replace(/^Intel\s+Arc\b/i, 'Arc').replace(/\s+Graphics$/i, '')
+
+  const gpuMemory = (gpu: GpuStat) => {
+    if (!gpu.memTotal) return undefined
+    const total = bytes(gpu.memTotal, 0)
+    return gpu.memUsed == null ? total : `${bytes(gpu.memUsed).split(' ')[0]}/${total}`
+  }
+
   const menuItems = (): MenuItem[] => {
     const items: MenuItem[] = []
     if (props.machine.url) items.push({ label: 'Open', href: props.machine.url })
@@ -199,19 +210,18 @@ export function MachineCard(props: Props): JSX.Element {
                     },
                   ]
                 : []),
-              ...(props.machine.tags?.length ? [{ label: '', value: props.machine.tags.join(' · ') }] : []),
+              ...(props.machine.tags?.length
+                ? [{ label: '', value: props.machine.tags.join(' · '), class: 'machine-tags' }]
+                : []),
             ]}
           />
           <Show when={props.guest?.gpu}>
             {(gpu) => (
               <span class="gpu" title={gpuTitle(gpu())}>
                 <GpuIcon />
-                <span class="gpu-name">{gpu().name}</span>
-                <Show when={gpu().memTotal}>
-                  <span class="gpu-mem">
-                    {gpu().memUsed != null ? `${bytes(gpu().memUsed)} / ` : ''}
-                    {bytes(gpu().memTotal, 0)}
-                  </span>
+                <span class="gpu-name">{gpuLabel(gpu().name)}</span>
+                <Show when={gpuMemory(gpu())}>
+                  {(mem) => <span class="gpu-mem">{mem()}</span>}
                 </Show>
               </span>
             )}

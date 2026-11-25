@@ -808,10 +808,15 @@ a.machine:hover h3 {
     font-size: 22px;
   }
 
-  /* A GPU chip shares the footer with uptime and tags. At this width the stats
-     take the first line, so the device name is not ellipsised away. */
-  .machine-foot .inline-stats {
-    flex-basis: 100%;
+  /* Keep the footer on one line: in the densest grid the GPU chip wins over
+     the machine tags, which repeat what the card header already says. The
+     "up" label is redundant with the status dot, so the value gets its space. */
+  .machine-foot:has(.gpu) .machine-tags {
+    display: none;
+  }
+
+  .machine-foot .inline-stat-label {
+    display: none;
   }
 }
 
@@ -882,10 +887,10 @@ a.machine:hover h3 {
 
 .machine-foot {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 10px;
+  gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
   font-family: var(--font-mono);
@@ -928,10 +933,10 @@ a.machine:hover h3 {
 .gpu {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   margin-left: auto;
-  padding: 0 6px;
+  padding: 0 5px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.035);
@@ -952,7 +957,7 @@ a.machine:hover h3 {
 
 .gpu-mem {
   flex: none;
-  padding-left: 6px;
+  padding-left: 4px;
   border-left: 1px solid var(--line);
   color: var(--muted);
 }
