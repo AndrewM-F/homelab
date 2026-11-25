@@ -51,6 +51,10 @@ function Dashboard() {
     applyStoredResourceView(readStoredResourceView())
     applyStoredGridColumns(readStoredGridColumns())
 
+    // The server rendered a snapshot it received before this request; take a fresh
+    // one immediately so the first thing on screen is current.
+    void refresh()
+
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refresh()
     }, POLL_MS)

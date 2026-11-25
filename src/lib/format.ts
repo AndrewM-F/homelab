@@ -38,11 +38,15 @@ export function duration(seconds: number | undefined | null): string {
 
 export function clock(ts: number | undefined | null): string {
   if (!ts) return '—'
-  return new Date(ts * 1000).toLocaleTimeString([], {
+  // Pinned to UTC and labelled: the Worker renders this on the server, where the
+  // timezone is UTC, so an unpinned clock showed one time in the server HTML and
+  // another after hydration.
+  return `${new Date(ts * 1000).toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-  })
+    timeZone: 'UTC',
+  })} UTC`
 }
 
 /** Clamps a 0..1 utilisation into the traffic-light banding used by the meters. */
