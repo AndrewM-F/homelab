@@ -202,19 +202,37 @@ def agent_disk(vmid: int, node: str) -> tuple[int, int, str] | None:
             if out.returncode == 0:
                 payload = json.loads(out.stdout or "{}")
                 entries = payload.get("result", payload) if isinstance(payload, dict) else payload
+                root_mounts = ("/", "C:\\", "C:/")
+                root = None
+                root_saturated = False
+                largest = None
                 for entry in entries or []:
                     total = int(entry.get("total-bytes") or 0)
+                    used = int(entry.get("used-bytes") or 0)
                     if total <= 0:
                         continue
                     mount = str(entry.get("mountpoint", ""))
-                    used = int(entry.get("used-bytes") or 0)
-                    # Prefer the root filesystem; otherwise the largest one, which
-                    # skips Windows' recovery and EFI partitions.
-                    if mount in ("/", "C:\\", "C:/"):
-                        found = (used, total, mount)
-                        break
-                    if found is None or total > found[1]:
-                        found = (used, total, mount)
+                    if mount in root_mounts:
+                        # A read-only system image reports itself 100% full: that is
+                        # the image's size, not pressure (ZimaOS root is exactly this).
+                        if used >= total:
+                            root_saturated = True
+                        else:
+                            root = (used, total, mount)
+                        continue
+                    # Other mounts can be a media array or a NAS share that has nothing
+                    # to do with this machine's own disk, so they are never preferred.
+                    if largest is None or total > largest[1]:
+                        largest = (used, total, mount)
+
+                if root is not None:
+                    found = root
+                elif root_saturated:
+                    # Leave it to Proxmox's provisioned size rather than reporting
+                    # somebody else's volume as this machine's disk.
+                    found = None
+                else:
+                    found = largest
         except Exception:  # noqa: BLE001 - a missing agent is expected, not fatal
             found = None
 
@@ -415,6 +433,52 @@ def guest_ostype(vmid: int) -> str:
     return ""
 
 
+def lxc_memory(vmid: int) -> tuple[int, int]:
+    """
+    (resident, reclaimable) bytes for a running container, from its own cgroup.
+
+    pvesh reports one figure and its meaning shifts with the container, so both
+    numbers are read here instead: `memory.current` is everything the cgroup
+    holds, `inactive_file` is the page cache the kernel would drop first.
+    """
+    current = 0
+    inactive = 0
+    try:
+        with open(f"/sys/fs/cgroup/lxc/{vmid}/memory.current", "r", encoding="utf-8") as handle:
+            current = int(handle.read().strip())
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(f"/sys/fs/cgroup/lxc/{vmid}/memory.stat", "r", encoding="utf-8") as handle:
+            for line in handle:
+                key, _, value = line.partition(" ")
+                if key == "inactive_file":
+                    inactive = int(value.strip())
+                    break
+    except (OSError, ValueError):
+        pass
+    return current, inactive
+
+
+def lxc_inactive_file(vmid: int) -> int:
+    """
+    Reclaimable page cache of a running container, in bytes.
+
+    A container's cgroup counts its page cache as usage, so a busy runner reads
+    full while most of it would be handed back the moment anything asked. The
+    inactive half of the file cache is the part the kernel drops first.
+    """
+    try:
+        with open(f"/sys/fs/cgroup/lxc/{vmid}/memory.stat", "r", encoding="utf-8") as handle:
+            for line in handle:
+                key, _, value = line.partition(" ")
+                if key == "inactive_file":
+                    return int(value.strip())
+    except (OSError, ValueError):
+        pass
+    return 0
+
+
 def agent_memory(vmid: int) -> tuple[int, int, int] | None:
     """
     Real memory use from the QEMU guest agent, for VMs that cannot balloon.
@@ -542,11 +606,26 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
         # Splitting resident memory into "really used" and "page cache" needs the
         # guest's own MemAvailable, which neither pvesh nor the balloon reports.
         mem_cache = 0
-        if kind != "lxc" and item.get("status") == "running":
+        if kind == "lxc" and item.get("status") == "running":
+            current, inactive = lxc_memory(vmid)
+            if current > 0:
+                mem_cache = min(inactive, current)
+                mem_used = current - mem_cache
+        elif kind != "lxc" and item.get("status") == "running":
             measured_mem = agent_memory(vmid)
             if measured_mem:
-                mem_used, mem_total, mem_cache = measured_mem
-                mem_source = "guest"
+                agent_used, agent_total, agent_cache = measured_mem
+                # An agent inside a containerised appliance can answer with that
+                # container's memory, which reads smaller than the VM itself. A
+                # total far below the configured size is that, not a resize.
+                if mem_total > 0 and agent_total < mem_total * 0.6:
+                    warnings.append(
+                        f"{item.get('name') or vmid}: guest agent reported {agent_total} bytes "
+                        f"against a {mem_total} byte VM; keeping the Proxmox figures"
+                    )
+                else:
+                    mem_used, mem_total, mem_cache = agent_used, agent_total, agent_cache
+                    mem_source = "guest"
 
         guests.append(
             {
@@ -555,7 +634,7 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 "status": item.get("status", "unknown"),
                 "cpu": round(float(item.get("cpu") or 0), 4),
                 "maxcpu": int(item.get("maxcpu") or 0),
-                "mem": mem_used,
+                "mem": min(mem_used, mem_total),
                 "maxmem": mem_total,
                 "memCache": mem_cache,
                 "disk": used,
