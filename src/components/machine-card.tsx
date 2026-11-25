@@ -176,6 +176,14 @@ export function MachineCard(props: Props): JSX.Element {
                 label: 'up',
                 value: props.online === false ? 'stopped' : sampled() ? duration(uptime()) : '—',
               },
+              ...(props.guest?.diskExtra
+                ? [
+                    {
+                      label: '',
+                      value: `${props.guest.diskExtra.label} ${bytes(props.guest.diskExtra.total)}`,
+                    },
+                  ]
+                : []),
               ...(props.machine.tags?.length ? [{ label: '', value: props.machine.tags.join(' · ') }] : []),
             ]}
           />

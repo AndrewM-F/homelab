@@ -135,6 +135,8 @@ export const PRIVATE_SERVICE_FIELDS = [
 ] as const
 
 export interface GuestStat {
+  /** A large non-root volume inside the guest (media array, NAS share). */
+  diskExtra?: { label: string; used: number; total: number }
   vmid: number
   type: GuestType
   status: string

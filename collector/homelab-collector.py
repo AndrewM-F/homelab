@@ -57,6 +57,9 @@ SSH_TIMEOUT = 6.0
 SSH_IDENTITY = "/etc/homelab-collector/ssh_probe"
 
 _agent_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
+# A big non-root volume inside the guest (a media array, a NAS share) is worth
+# showing, but it is not the machine's own disk, so it rides along separately.
+_disk_extra: dict[int, tuple[int, int, str]] = {}
 _ssh_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
 # Machines that are not Proxmox guests report through their own probe script.
 MACHINE_TTL = 30.0
@@ -227,10 +230,19 @@ def agent_disk(vmid: int, node: str) -> tuple[int, int, str] | None:
 
                 if root is not None:
                     found = root
+                    # Only when it dwarfs the system disk, so a normal /home or
+                    # /var partition does not get promoted.
+                    if largest is not None and largest[1] >= root[1] * 4:
+                        _disk_extra[vmid] = largest
+                    else:
+                        _disk_extra.pop(vmid, None)
                 elif root_saturated:
-                    # Leave it to Proxmox's provisioned size rather than reporting
-                    # somebody else's volume as this machine's disk.
+                    # Leave the headline to Proxmox's provisioned size rather than
+                    # reporting somebody else's volume as this machine's disk, but
+                    # keep the biggest local volume for the card's footer.
                     found = None
+                    if largest is not None:
+                        _disk_extra[vmid] = largest
                 else:
                     found = largest
         except Exception:  # noqa: BLE001 - a missing agent is expected, not fatal
@@ -637,10 +649,26 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 "mem": min(mem_used, mem_total),
                 "maxmem": mem_total,
                 "memCache": mem_cache,
+                # Report against what was provisioned, so the slice the guest never
+                # formats (ZimaOS leaves ~12 GiB of its 32 GiB to the OS image and
+                # overlay) counts as used headroom instead of vanishing from the card.
                 "disk": used,
-                "maxdisk": total,
+                "maxdisk": max(total, allocated, int(item.get("maxdisk") or 0))
+                if kind == "qemu"
+                else total,
                 "diskAllocated": allocated,
                 "diskSource": source,
+                **(
+                    {
+                        "diskExtra": {
+                            "label": _disk_extra[vmid][2],
+                            "used": _disk_extra[vmid][0],
+                            "total": _disk_extra[vmid][1],
+                        }
+                    }
+                    if vmid in _disk_extra
+                    else {}
+                ),
                 "memSource": mem_source,
                 "uptime": int(item.get("uptime") or 0),
                 "name": item.get("name"),
