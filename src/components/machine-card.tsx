@@ -34,10 +34,12 @@ export function MachineCard(props: Props): JSX.Element {
   const coreLabel = () => `${cores()} core${cores() === 1 ? '' : 's'}`
 
   const memFraction = () => (memTotal() > 0 ? memUsed() / memTotal() : 0)
-  /** Page cache is resident but disposable, so it is measured apart from real use. */
-  const memCache = () => Math.min(props.guest?.memCache ?? props.host?.memCache ?? 0, memUsed())
-  const memRealFraction = () => (memTotal() > 0 ? Math.max(0, memUsed() - memCache()) / memTotal() : 0)
-  const memCacheFraction = () => (memTotal() > 0 ? memCache() / memTotal() : 0)
+  // `mem` is already real use (cache excluded) and `memCache` is the extra resident
+  // page cache, so the two add up to what the hypervisor is actually holding.
+  const memCache = () => Math.max(0, props.guest?.memCache ?? props.host?.memCache ?? 0)
+  const memRealFraction = () => (memTotal() > 0 ? Math.min(1, memUsed() / memTotal()) : 0)
+  const memCacheFraction = () => (memTotal() > 0 ? Math.min(1 - memRealFraction(), memCache() / memTotal()) : 0)
+  const memResident = () => memUsed() + memCache()
   const memCacheLabel = () => (memCache() > 0 ? `${bytes(memCache())} cache` : undefined)
   const diskFraction = () => (diskTotal() > 0 ? diskUsed() / diskTotal() : 0)
   // Containers report rootfs usage; VMs only report it when the guest agent
