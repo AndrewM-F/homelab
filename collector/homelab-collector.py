@@ -74,6 +74,10 @@ _machine_state: dict[str, str | None] = {}
 GPU_TTL = 30.0
 _gpu_cache: dict[int, tuple[float, dict | None]] = {}
 _pci_cache: dict[str, dict | None] = {}
+# The thin pool changes slowly, and lvs is not free, so it is cached with the
+# other lookups that need a subprocess.
+POOL_TTL = 30.0
+_pool_cache: tuple[float, dict | None] | None = None
 
 # ---------------------------------------------------------------- sampling
 
@@ -226,6 +230,87 @@ def host_disk() -> tuple[int, int]:
     return max(0, provisioned - free), provisioned
 
 
+def pool_stats() -> dict | None:
+    """
+    LVM thin pool behind the guest disks: actual data and committed capacity.
+
+    The pool is shared by every guest, so it is a different figure from the
+    root filesystem on the hypervisor card. "Committed" is the sum of the thin
+    volumes' sizes, including snapshots: the space the pool has promised even
+    when the guests have not written it yet.
+    """
+    global _pool_cache
+    now = time.time()
+    if _pool_cache and now - _pool_cache[0] < POOL_TTL:
+        return _pool_cache[1]
+
+    found: dict | None = None
+    lvs = shutil.which("lvs")
+    if lvs:
+        try:
+            out = subprocess.run(
+                [
+                    lvs,
+                    "-a",
+                    "--noheadings",
+                    "--units",
+                    "b",
+                    "--nosuffix",
+                    "--separator",
+                    "|",
+                    "-o",
+                    "lv_name,vg_name,lv_attr,lv_size,data_percent,metadata_percent",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            rows: list[list[str]] = []
+            for line in out.stdout.splitlines():
+                fields = [field.strip() for field in line.split("|")]
+                if len(fields) >= 6:
+                    rows.append(fields)
+
+            # A thin pool is an `lvs` row whose attr starts with `t` and whose
+            # data_percent is populated (the internal data LV has neither).
+            pool = next((row for row in rows if row[2].startswith("t") and row[4]), None)
+            if pool:
+                pool_name, vg, _attr, size, data_pct, meta_pct = pool[:6]
+                total = int(size)
+                used = int(total * float(data_pct.lstrip("<")) / 100.0)
+                # Every thin volume and snapshot in the same VG is committed
+                # capacity, whether or not its blocks have been written.
+                committed = sum(
+                    int(row[3])
+                    for row in rows
+                    if row[1] == vg and row[2].startswith("V") and not row[0].startswith("[")
+                )
+                meta_total = next(
+                    (
+                        int(row[3])
+                        for row in rows
+                        if row[1] == vg and row[0].strip("[]").endswith("_tmeta")
+                    ),
+                    0,
+                )
+                found = {
+                    "name": pool_name,
+                    "used": used,
+                    "total": total,
+                    "committed": max(committed, used),
+                    "metaUsed": (
+                        int(meta_total * float(meta_pct.lstrip("<")) / 100.0) if meta_total else 0
+                    ),
+                    "metaTotal": meta_total,
+                }
+        except Exception:  # noqa: BLE001 - a host without LVM is fine
+            found = None
+
+    _pool_cache = (now, found)
+    return found
+
+
 def host_stats(interface: str) -> dict:
     cores = os.cpu_count() or 1
     try:
@@ -251,6 +336,7 @@ def host_stats(interface: str) -> dict:
         "memCache": cache,
         "disk": disk_used,
         "diskTotal": disk_total,
+        "pool": pool_stats(),
         "swapUsed": swap_used,
         "swapTotal": swap_total,
         "uptime": uptime(),

@@ -16,6 +16,8 @@ interface Props {
   center: string
   label: string
   note?: string
+  /** Overrides the generated tooltip for a metric with more detail. */
+  title?: string
 }
 
 /**
@@ -32,7 +34,10 @@ export function Gauge(props: Props): JSX.Element {
   const inner = () => Math.min(1 - clamped(), Math.max(0, Number.isFinite(props.inner ?? 0) ? (props.inner as number) : 0))
 
   return (
-    <div class="gauge" title={`${props.label} ${props.center}${props.note ? ` · ${props.note}` : ''}`}>
+    <div
+      class="gauge"
+      title={props.title ?? `${props.label} ${props.center}${props.note ? ` · ${props.note}` : ''}`}
+    >
       <svg class="gauge-frame" viewBox="0 0 64 38" role="img" aria-label={`${props.label} ${props.center}`}>
         <path
           class="gauge-track"

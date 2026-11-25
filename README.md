@@ -226,8 +226,16 @@ Every disk figure uses the same rule: the denominator is the size that was
 provisioned, and anything that is not writable free space counts as used — the
 unformatted slice, ext4 metadata, and the blocks ext4 reserves for root. A 96 GiB
 volume that formats to 93.9 GiB therefore reads `used / 96`, not `used / 93.9`.
-The hypervisor is measured the same way (provisioned root LV minus `f_bavail`),
-as is the MacBook (device size minus `df` available).
+The hypervisor root LV is measured the same way (provisioned size minus
+`f_bavail`) and kept in its disk tooltip, as is the MacBook (device size minus
+`df` available).
+
+The hypervisor card's headline disk gauge is the shared LVM thin pool behind
+`local-lvm`, not root. The outer arc is data actually written; the grey band is
+capacity committed to thin volumes and snapshots but not yet written. The note
+shows the committed share, and the tooltip carries the pool name, metadata and
+root `/` figures. A pool that reaches 100% committed is the thin-provisioning
+warning no guest's own filesystem can show.
 
 Memory works the same way: containers report it, balloooned VMs report it, and a
 VM with **PCIe passthrough** cannot balloon at all — the guest's memory has to

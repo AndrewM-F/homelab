@@ -25,12 +25,29 @@ export function MachineCard(props: Props): JSX.Element {
   const cpu = () => (props.guest ? props.guest.cpu : (props.host?.cpu ?? 0))
   const memUsed = () => (props.guest ? props.guest.mem : (props.host?.memUsed ?? 0))
   const memTotal = () => (props.guest ? props.guest.maxmem : (props.host?.memTotal ?? 0))
-  // The host's disk is the provisioned root volume, not the raw filesystem
-  // sample: a 96 GiB volume formats to 93.9 GiB and the card must show 96.
-  const diskUsed = () => (props.guest ? props.guest.disk : (props.host?.disk ?? 0))
-  const diskTotal = () => (props.guest ? props.guest.maxdisk : (props.host?.diskTotal ?? 0))
+  // The hypervisor's disk gauge is the shared thin pool, not the root LV: the
+  // root is a small OS volume while every guest draws from the pool. Guests
+  // keep their own filesystem figures; a host without a thin pool falls back to
+  // root, which is the provisioned volume rather than the raw `df` sample.
+  const pool = () => props.host?.pool
+  const usingPool = () => (pool()?.total ?? 0) > 0
+  const rootUsed = () => props.host?.disk ?? 0
+  const rootTotal = () => props.host?.diskTotal ?? 0
+  const rootFraction = () => (rootTotal() > 0 ? rootUsed() / rootTotal() : 0)
+  const diskUsed = () =>
+    usingPool() ? (pool()?.used ?? 0) : props.guest ? props.guest.disk : (props.host?.disk ?? 0)
+  const diskTotal = () =>
+    usingPool()
+      ? (pool()?.total ?? 0)
+      : props.guest
+        ? props.guest.maxdisk
+        : (props.host?.diskTotal ?? 0)
   const diskAllocated = () =>
-    props.guest ? props.guest.diskAllocated : (props.host?.diskTotal ?? 0)
+    usingPool()
+      ? (pool()?.total ?? 0)
+      : props.guest
+        ? props.guest.diskAllocated
+        : (props.host?.diskTotal ?? 0)
   const uptime = () => (props.guest ? props.guest.uptime : (props.host?.uptime ?? 0))
   const cores = () => props.guest?.maxcpu ?? props.host?.cores ?? 0
   const coreLabel = () => `${cores()} core${cores() === 1 ? '' : 's'}`
@@ -46,7 +63,20 @@ export function MachineCard(props: Props): JSX.Element {
   const diskFraction = () => (diskTotal() > 0 ? diskUsed() / diskTotal() : 0)
   // Containers report rootfs usage; VMs only report it when the guest agent
   // answers, so `diskSource` says which of the two numbers this is.
-  const diskKnown = () => (props.guest ? props.guest.diskSource === 'guest' : diskTotal() > 0)
+  const diskKnown = () =>
+    usingPool() ? true : props.guest ? props.guest.diskSource === 'guest' : diskTotal() > 0
+  // The pool's grey band is the capacity committed to thin volumes but not yet
+  // written. It is the storage analogue of memory's reclaimable cache band.
+  const poolCommittedFraction = () => {
+    const p = pool()
+    return p && p.total > 0 ? Math.min(1, p.committed / p.total) : 0
+  }
+  const poolInnerFraction = () => {
+    const p = pool()
+    if (!p || p.total <= 0) return 0
+    const unwritten = Math.max(0, p.committed - p.used)
+    return Math.min(1 - diskFraction(), unwritten / p.total)
+  }
 
   const status = () => (props.online === undefined ? 'unknown' : props.online ? 'up' : 'down')
   const guestBadge = () =>
@@ -57,6 +87,27 @@ export function MachineCard(props: Props): JSX.Element {
     return diskKnown()
       ? `${bytes(diskUsed())} / ${bytes(diskTotal())}`
       : `${bytes(diskAllocated())} alloc`
+  }
+
+  const diskGaugeNote = () => {
+    if (!sampled()) return undefined
+    return usingPool() ? `${percent(poolCommittedFraction())} committed` : diskNote()
+  }
+
+  const cpuTitle = () =>
+    props.host
+      ? `cpu ${percent(cpu())} · ${coreLabel()} · load average, includes I/O wait`
+      : undefined
+
+  const poolTitle = () => {
+    const p = pool()
+    if (!p) return undefined
+    const meta = p.metaTotal && p.metaTotal > 0 ? ` · meta ${percent((p.metaUsed ?? 0) / p.metaTotal)}` : ''
+    const root =
+      rootTotal() > 0
+        ? ` · root / ${bytes(rootUsed())} / ${bytes(rootTotal())} (${percent(rootFraction())})`
+        : ''
+    return `thin pool ${p.name} · ${bytes(p.used)} / ${bytes(p.total)} used · ${percent(poolCommittedFraction())} committed${meta}${root}`
   }
 
   const gpuTitle = (gpu: GpuStat) => {
@@ -159,12 +210,14 @@ export function MachineCard(props: Props): JSX.Element {
                 }
               />
               <Meter
-                label="disk"
+                label={usingPool() ? 'pool' : 'disk'}
                 value={sampled() && diskKnown() ? diskFraction() : 0}
                 display={sampled() && diskKnown() ? bytes(diskUsed()) : '—'}
                 note={
                   sampled() && diskKnown()
-                    ? `/ ${bytes(diskTotal())}`
+                    ? usingPool()
+                      ? `/ ${bytes(diskTotal())} · ${percent(poolCommittedFraction())} committed`
+                      : `/ ${bytes(diskTotal())}`
                     : sampled()
                       ? `${bytes(diskAllocated())} allocated`
                       : undefined
@@ -179,6 +232,7 @@ export function MachineCard(props: Props): JSX.Element {
               center={sampled() ? percent(cpu()) : '—'}
               label="cpu"
               note={sampled() ? coreLabel() : 'no data'}
+              title={cpuTitle()}
             />
             <Gauge
               value={sampled() ? memRealFraction() : 0}
@@ -195,9 +249,11 @@ export function MachineCard(props: Props): JSX.Element {
             />
             <Gauge
               value={sampled() && diskKnown() ? diskFraction() : 0}
+              inner={usingPool() && sampled() ? poolInnerFraction() : 0}
               center={sampled() && diskKnown() ? percent(diskFraction()) : '—'}
-              label="disk"
-              note={diskNote()}
+              label={usingPool() ? 'pool' : 'disk'}
+              note={diskGaugeNote()}
+              title={usingPool() ? poolTitle() : undefined}
             />
           </div>
         </Show>

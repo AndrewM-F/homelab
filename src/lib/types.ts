@@ -183,12 +183,32 @@ export interface GuestStat {
   uptime: number
 }
 
+/**
+ * LVM thin pool behind the hypervisor's VM storage. The pool is shared by every
+ * guest, so it is measured separately from the root filesystem.
+ */
+export interface PoolStat {
+  /** LVM thin pool name, e.g. "data". */
+  name: string
+  /** Data actually written to the pool, bytes. */
+  used: number
+  /** Thin pool data capacity, bytes. */
+  total: number
+  /** Sum of thin volume sizes: used plus committed-but-unwritten, bytes. */
+  committed: number
+  /** Thin pool metadata in use and provisioned, bytes. */
+  metaUsed?: number
+  metaTotal?: number
+}
+
 export interface HostStat {
   name: string
   cores: number
   load: [number, number, number]
   /** Utilisation 0..1 derived from load average over cores. */
   cpu: number
+  /** The LVM thin pool used for guest disks, when this is a Proxmox host. */
+  pool?: PoolStat
   memUsed: number
   /** Reclaimable page cache included in `memUsed`; 0 when unknown. */
   memCache?: number
