@@ -1,0 +1,8 @@
+[Unit]
+Description=Prune cold GitLab CI caches when the disk fills
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ci-prune.sh
