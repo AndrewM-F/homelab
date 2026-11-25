@@ -123,7 +123,7 @@ def network() -> dict:
         return dict(_net_sample)
 
 
-def memory() -> tuple[int, int, int, int]:
+def memory() -> tuple[int, int, int, int, int]:
     info: dict[str, int] = {}
     for line in read("/proc/meminfo").splitlines():
         key, _, rest = line.partition(":")
@@ -133,9 +133,11 @@ def memory() -> tuple[int, int, int, int]:
             continue
     total = info.get("MemTotal", 0)
     available = info.get("MemAvailable", info.get("MemFree", 0))
+    cache = info.get("Cached", 0) + info.get("Buffers", 0) + info.get("SReclaimable", 0)
     swap_total = info.get("SwapTotal", 0)
     swap_free = info.get("SwapFree", 0)
-    return total - available, total, swap_total - swap_free, swap_total
+    used = total - available
+    return used, total, swap_total - swap_free, swap_total, min(cache, max(0, total - used))
 
 
 def uptime() -> int:
@@ -151,7 +153,7 @@ def host_stats(interface: str) -> dict:
         load = os.getloadavg()
     except OSError:
         load = (0.0, 0.0, 0.0)
-    used, total, swap_used, swap_total = memory()
+    used, total, swap_used, swap_total, cache = memory()
     net = network()
     return {
         "name": os.uname().nodename,
@@ -160,6 +162,7 @@ def host_stats(interface: str) -> dict:
         "cpu": round(min(1.0, load[0] / cores), 4),
         "memUsed": used,
         "memTotal": total,
+        "memCache": cache,
         "swapUsed": swap_used,
         "swapTotal": swap_total,
         "uptime": uptime(),
@@ -411,7 +414,7 @@ def guest_ostype(vmid: int) -> str:
     return ""
 
 
-def agent_memory(vmid: int) -> tuple[int, int] | None:
+def agent_memory(vmid: int) -> tuple[int, int, int] | None:
     """
     Real memory use from the QEMU guest agent, for VMs that cannot balloon.
 
@@ -424,7 +427,7 @@ def agent_memory(vmid: int) -> tuple[int, int] | None:
     if cached and now - cached[0] < AGENT_TTL:
         return cached[1]
 
-    result: tuple[int, int] | None = None
+    result: tuple[int, int, int] | None = None
     qm = shutil.which("qm")
     if qm:
         if guest_ostype(vmid).startswith("win"):
@@ -440,7 +443,9 @@ def agent_memory(vmid: int) -> tuple[int, int] | None:
             command = [
                 "sh",
                 "-c",
-                "awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{print \"total=\" t*1024 \" used=\" (t-a)*1024}' /proc/meminfo",
+                # used = MemTotal - MemAvailable (page cache excluded); cache = the
+                # reclaimable part still resident, so a guest full of cache reads cheap.
+                "awk '/MemTotal/{t=$2}/MemFree/{f=$2}/MemAvailable/{a=$2}END{print \"total=\" t*1024 \" used=\" (t-a)*1024 \" cache=\" (a-f)*1024}' /proc/meminfo",
             ]
         try:
             out = subprocess.run(
@@ -458,8 +463,9 @@ def agent_memory(vmid: int) -> tuple[int, int] | None:
                 )
                 total = int(values.get("total", 0))
                 used = int(values.get("used", 0))
+                cache = int(values.get("cache", 0))
                 if total > 0:
-                    result = (used, total)
+                    result = (used, total, cache)
         except Exception:  # noqa: BLE001 - a guest without an agent is expected
             result = None
 
@@ -527,11 +533,13 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
             or memory_is_guest_reported(vmid, item.get("node") or os.uname().nodename)
             else "resident"
         )
-        if mem_source == "resident":
-            # No balloon (passthrough VMs cannot have one): ask the agent instead.
+        # Splitting resident memory into "really used" and "page cache" needs the
+        # guest's own MemAvailable, which neither pvesh nor the balloon reports.
+        mem_cache = 0
+        if kind != "lxc" and item.get("status") == "running":
             measured_mem = agent_memory(vmid)
             if measured_mem:
-                mem_used, mem_total = measured_mem
+                mem_used, mem_total, mem_cache = measured_mem
                 mem_source = "guest"
 
         guests.append(
@@ -543,6 +551,7 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 "maxcpu": int(item.get("maxcpu") or 0),
                 "mem": mem_used,
                 "maxmem": mem_total,
+                "memCache": mem_cache,
                 "disk": used,
                 "maxdisk": total,
                 "diskAllocated": allocated,

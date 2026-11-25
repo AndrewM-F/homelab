@@ -34,6 +34,11 @@ export function MachineCard(props: Props): JSX.Element {
   const coreLabel = () => `${cores()} core${cores() === 1 ? '' : 's'}`
 
   const memFraction = () => (memTotal() > 0 ? memUsed() / memTotal() : 0)
+  /** Page cache is resident but disposable, so it is measured apart from real use. */
+  const memCache = () => Math.min(props.guest?.memCache ?? props.host?.memCache ?? 0, memUsed())
+  const memRealFraction = () => (memTotal() > 0 ? Math.max(0, memUsed() - memCache()) / memTotal() : 0)
+  const memCacheFraction = () => (memTotal() > 0 ? memCache() / memTotal() : 0)
+  const memCacheLabel = () => (memCache() > 0 ? `${bytes(memCache())} cache` : undefined)
   const diskFraction = () => (diskTotal() > 0 ? diskUsed() / diskTotal() : 0)
   // Containers report rootfs usage; VMs only report it when the guest agent
   // answers, so `diskSource` says which of the two numbers this is.
@@ -141,8 +146,9 @@ export function MachineCard(props: Props): JSX.Element {
               note={sampled() ? coreLabel() : 'no data'}
             />
             <Gauge
-              value={sampled() ? memFraction() : 0}
-              center={sampled() ? percent(memFraction()) : '—'}
+              value={sampled() ? memRealFraction() : 0}
+              inner={sampled() ? memCacheFraction() : 0}
+              center={sampled() ? percent(memRealFraction()) : '—'}
               label="mem"
               note={
                 sampled()
