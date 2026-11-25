@@ -3,8 +3,9 @@
 #
 # Order matters: the emergency reclaim runs first, even while a job is live. A
 # full disk breaks the running job too, and pruning only *unused* volumes cannot
-# touch what that job has mounted. The softer rules below do wait for idle, so a
-# pipeline in flight keeps its warm caches.
+# touch what that job has mounted. Above the high-water mark, cold volumes are
+# dropped even while a pipeline is running for the same reason; images and build
+# cache still wait for idle, and everything waits below the trigger.
 set -u
 
 FS=/
@@ -33,7 +34,18 @@ if [ "$used" -ge "$EMERGENCY" ]; then
   exit 0
 fi
 
-# 2. A running pipeline owns its caches; nothing cold is worth evicting yet.
+# 2. High water with a live pipeline: cold cache volumes are the bulk of the
+# usage and are not attached to any job, so drop them before the disk fills.
+# Images and build cache stay warm — the emergency threshold handles those.
+if [ "$busy" -gt 0 ] && [ "$used" -ge "$HIGH_WATER" ]; then
+  echo "high water with jobs running: dropping unused volumes"
+  docker container prune -f >/dev/null 2>&1
+  docker volume prune -af 2>&1 | tail -1
+  echo "usage_after=$(usage)%"
+  exit 0
+fi
+
+# 3. A running pipeline owns its caches; nothing cold is worth evicting yet.
 if [ "$busy" -gt 0 ]; then
   echo "jobs running: not pruning"
   exit 0

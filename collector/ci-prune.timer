@@ -1,0 +1,11 @@
+[Unit]
+Description=GitLab CI cache guard
+
+[Timer]
+# A pipeline can add gigabytes per minute; a five-minute gap let the disk reach
+# 100% between checks. The script is cheap and does nothing below the trigger.
+OnCalendar=*:0/1
+Persistent=true
+
+[Install]
+WantedBy=timers.target
