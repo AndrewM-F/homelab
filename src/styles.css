@@ -286,6 +286,20 @@ kbd {
   background: transparent;
 }
 
+.chip-net {
+  gap: 10px;
+}
+
+.net-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.net-pair svg {
+  color: var(--dim);
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -793,6 +807,12 @@ a.machine:hover h3 {
   .logo-rail .logo-mono {
     font-size: 22px;
   }
+
+  /* A GPU chip shares the footer with uptime and tags. At this width the stats
+     take the first line, so the device name is not ellipsised away. */
+  .machine-foot .inline-stats {
+    flex-basis: 100%;
+  }
 }
 
 /* A two-column card has room to spare; the gauge cap is what holds it back. */
@@ -862,9 +882,10 @@ a.machine:hover h3 {
 
 .machine-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
   font-family: var(--font-mono);
@@ -904,21 +925,36 @@ a.machine:hover h3 {
   color: var(--muted);
 }
 
-.net {
-  display: flex;
-  gap: 10px;
-  flex: none;
-}
-
-.net-item {
+.gpu {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 5px;
+  gap: 5px;
+  min-width: 0;
+  margin-left: auto;
+  padding: 0 6px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.035);
   color: var(--dim);
+}
+
+.gpu svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.gpu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gpu-mem {
+  flex: none;
+  padding-left: 6px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
 }
 
 /* ---------- cards, menus and the service library ---------- */

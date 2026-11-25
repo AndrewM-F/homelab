@@ -1,10 +1,20 @@
 import { createFileRoute } from '@tanstack/solid-router'
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
-import { CubeIcon, BatteryIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon } from '../components/icons'
+import {
+  CubeIcon,
+  BatteryIcon,
+  DownloadIcon,
+  GridIcon,
+  LockIcon,
+  RefreshIcon,
+  SearchIcon,
+  ServerIcon,
+  UploadIcon,
+} from '../components/icons'
 import { ColumnSwitch } from '../components/column-switch'
 import { MachineCard } from '../components/machine-card'
 import { ServiceCard } from '../components/service-card'
-import { clock, duration, percent } from '../lib/format'
+import { bytes, clock, duration, rate } from '../lib/format'
 import { applyStoredGridColumns, readStoredGridColumns } from '../lib/grid-columns'
 import { applyStoredResourceView, readStoredResourceView } from '../lib/resource-view'
 import type { GuestStat, HostSample, Inventory, Machine, ProbeResult, Service, StatsResponse } from '../lib/types'
@@ -268,8 +278,19 @@ function Dashboard() {
         </span>
         <Show when={snapshot()?.host}>
           {(host) => (
-            <span class="chip is-quiet" title="Hypervisor CPU from load average">
-              host {percent(host().cpu)}
+            <span
+              class="chip is-quiet chip-net"
+              title={`network since boot · received ${bytes(host().net.rx)}, sent ${bytes(host().net.tx)}`}
+              aria-label={`network received ${rate(host().net.rxRate)}, sent ${rate(host().net.txRate)}`}
+            >
+              <span class="net-pair">
+                <DownloadIcon />
+                {rate(host().net.rxRate)}
+              </span>
+              <span class="net-pair">
+                <UploadIcon />
+                {rate(host().net.txRate)}
+              </span>
             </span>
           )}
         </Show>

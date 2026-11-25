@@ -235,6 +235,17 @@ stay mapped for DMA, so Proxmox falls back to reporting the QEMU process size an
 the VM looks full. Those guests are asked directly through the agent instead
 (`qm guest exec`, cached 60 s), which is the only accurate source left.
 
+#### GPUs
+
+A guest's card shows the graphics device its Proxmox configuration gives it. The
+collector reads `hostpci*` entries for passthrough and `vga: virtio-gl` (plus any
+`rendernode=` in `args`) for a GPU the host renders with, then resolves the PCI
+address through `lspci`. Passthrough hides the device from the hypervisor, so a
+running Windows guest is asked through the guest agent for its adapter name and
+dedicated VRAM (`qm guest exec`, cached 30 s). A virtio-gl guest shows the host
+GPU instead, without a VRAM figure: that memory belongs to the host, not the
+guest.
+
 The SSH fallback is deliberately narrow. The collector's key is pinned
 server-side to a single read-only command, so it can measure and nothing else:
 

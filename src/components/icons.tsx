@@ -154,6 +154,16 @@ export function UploadIcon(props: { size?: number }): JSX.Element {
   )
 }
 
+export function GpuIcon(props: { size?: number }): JSX.Element {
+  return (
+    <svg {...base} style={{ width: `${props.size ?? 12}px`, height: `${props.size ?? 12}px` }}>
+      <rect x="3" y="3" width="10" height="10" rx="1.5" />
+      <rect x="6" y="6" width="4" height="4" rx="0.8" />
+      <path d="M1.5 5.5h1.5M1.5 10.5h1.5M13 5.5h1.5M13 10.5h1.5M5.5 1.5v1.5M10.5 1.5v1.5M5.5 13v1.5M10.5 13v1.5" />
+    </svg>
+  )
+}
+
 /** The column switches: one framed layout per count, so the dividers are the only difference. */
 const columns = {
   ...base,

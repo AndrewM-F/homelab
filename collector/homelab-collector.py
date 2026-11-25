@@ -30,6 +30,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import shutil
 import socket
 import ssl
@@ -68,6 +69,11 @@ MACHINE_TTL = 30.0
 _machine_cache: dict[str, tuple[float, dict | None]] = {}
 # Last reported problem per machine, so the journal records a change, not a poll.
 _machine_state: dict[str, str | None] = {}
+# GPU attachment is static; VRAM use on a Windows guest costs a guest-agent
+# round trip, so the whole answer is cached like the other slow lookups.
+GPU_TTL = 30.0
+_gpu_cache: dict[int, tuple[float, dict | None]] = {}
+_pci_cache: dict[str, dict | None] = {}
 
 # ---------------------------------------------------------------- sampling
 
@@ -512,15 +518,29 @@ def memory_is_guest_reported(vmid: int, node: str) -> bool:
     return active
 
 
-def guest_ostype(vmid: int) -> str:
+def vm_config(vmid: int) -> dict[str, str]:
+    """Current (top-level) options from a VM's Proxmox config."""
+    options: dict[str, str] = {}
     try:
         with open(f"/etc/pve/qemu-server/{vmid}.conf", "r", encoding="utf-8") as handle:
             for line in handle:
-                if line.startswith("ostype:"):
-                    return line.split(":", 1)[1].strip()
+                line = line.rstrip("\n")
+                if not line or line.startswith("#"):
+                    continue
+                # Snapshot and PENDING sections describe other states, not what
+                # the machine is running with now.
+                if line.startswith("["):
+                    break
+                key, sep, value = line.partition(":")
+                if sep:
+                    options[key.strip()] = value.strip()
     except OSError:
         pass
-    return ""
+    return options
+
+
+def guest_ostype(vmid: int) -> str:
+    return vm_config(vmid).get("ostype", "")
 
 
 def lxc_memory(vmid: int) -> tuple[int, int]:
@@ -631,6 +651,205 @@ def agent_memory(vmid: int) -> tuple[int, int, int] | None:
 
     _mem_cache[vmid] = (now, result)
     return result
+
+
+# Windows only: the adapter's marketing name, its dedicated VRAM from the
+# display class key (Win32_VideoController.AdapterRAM saturates at 4 GiB), and
+# the WDDM counter for that same adapter, matched by LUID so the software
+# renderer is never mistaken for the real GPU.
+GPU_QUERY = (
+    r"$gpu=Get-CimInstance Win32_VideoController | Where-Object { $_.PNPDeviceID -like 'PCI\*' -and $_.Name -notlike 'Microsoft*' } | Select-Object -First 1;"
+    r"$name=$gpu.Name;"
+    r"$luid=(Get-PnpDeviceProperty -InstanceId $gpu.PNPDeviceID -KeyName '{60b193cb-5276-4d0f-96fc-f173abad3ec6} 2' -ErrorAction SilentlyContinue).Data;"
+    r"$total=0;"
+    r"Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^\d{4}$' } | ForEach-Object { $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($p.DriverDesc -eq $name) { $m=$p.'HardwareInformation.qwMemorySize'; if ($m -is [byte[]]) { $total=[BitConverter]::ToUInt64($m,0) } elseif ($m) { $total=[uint64]$m } } };"
+    r"$used=0;"
+    r"if ($luid) { $tag=('luid_0x{0:X8}_0x{1:X8}_phys_0' -f ([uint32]([uint64]$luid -shr 32)),([uint32]([uint64]$luid -band 0xFFFFFFFF))); $mem=Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory | Where-Object { $_.Name -eq $tag } | Select-Object -First 1; if ($mem) { $used=$mem.DedicatedUsage } };"
+    r"'name={0}|total={1}|used={2}' -f $name,$total,$used"
+)
+
+
+def clean_gpu_name(name: str) -> str:
+    """Drop the trademark marks and Arc's "Graphics" suffix for a footer."""
+    name = re.sub(r"\((?:R|TM|C)\)", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+", " ", name).strip()
+    if re.search(r"\bintel\b.*\barc\b", name, re.IGNORECASE):
+        name = re.sub(r"\s+graphics$", "", name, flags=re.IGNORECASE)
+    return name
+
+
+def agent_gpu(vmid: int) -> dict | None:
+    """Adapter name and dedicated VRAM use, from a running Windows guest."""
+    qm = shutil.which("qm")
+    if not qm or not guest_ostype(vmid).startswith("win"):
+        return None
+    try:
+        out = subprocess.run(
+            [qm, "guest", "exec", str(vmid), "--", "powershell", "-NoProfile", "-Command", GPU_QUERY],
+            capture_output=True,
+            text=True,
+            timeout=AGENT_TIMEOUT + 6,
+            check=False,
+        )
+        if out.returncode != 0:
+            return None
+        payload = json.loads(out.stdout or "{}")
+        data = str(payload.get("out-data") or "")
+        rows = [line.strip() for line in data.splitlines() if line.strip()]
+        if not rows:
+            return None
+        values: dict[str, str] = {}
+        for part in rows[-1].split("|"):
+            key, sep, value = part.partition("=")
+            if sep:
+                values[key.strip()] = value.strip()
+        name = clean_gpu_name(values.get("name", ""))
+        if not name:
+            return None
+        return {
+            "name": name,
+            "total": int(values.get("total") or 0),
+            "used": int(values.get("used") or 0),
+        }
+    except Exception:  # noqa: BLE001 - a guest without an agent is expected
+        return None
+
+
+def full_pci(address: str) -> str:
+    address = address.strip().lower()
+    return address if address.count(":") >= 2 else f"0000:{address}"
+
+
+def pci_device(address: str) -> dict | None:
+    """Class and names for a PCI function, resolved once through lspci."""
+    key = full_pci(address)
+    if key in _pci_cache:
+        return _pci_cache[key]
+
+    found: dict | None = None
+    lspci = shutil.which("lspci")
+    if lspci:
+        try:
+            out = subprocess.run(
+                [lspci, "-s", key, "-vmm"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                check=False,
+            )
+            fields: dict[str, str] = {}
+            for line in out.stdout.splitlines():
+                field, sep, value = line.partition(":")
+                if sep:
+                    fields[field.strip()] = value.strip()
+            if fields.get("Slot"):
+                found = {
+                    "class": fields.get("Class", ""),
+                    "vendor": fields.get("Vendor", ""),
+                    "device": fields.get("Device", ""),
+                }
+        except Exception:  # noqa: BLE001 - a host without lspci is fine
+            found = None
+    _pci_cache[key] = found
+    return found
+
+
+def is_display(device: dict) -> bool:
+    klass = device.get("class", "").lower()
+    return "vga" in klass or "3d controller" in klass or "display controller" in klass
+
+
+def gpu_name(device: dict) -> str:
+    """A short, human name from lspci's vendor/device strings."""
+    vendor = device.get("vendor", "").lower()
+    model = device.get("device", "").strip()
+    bracket = re.search(r"\[([^\]]+)\]\s*$", model)
+    label = (bracket.group(1) if bracket else model).strip()
+    if not label:
+        return "GPU"
+    # "ati" has to be a word of its own: it appears inside "Corporation" in
+    # Intel's vendor string, which would otherwise brand an Intel GPU as AMD.
+    if "intel" in vendor:
+        return label if label.lower().startswith("intel") else f"Intel {label}"
+    if "nvidia" in vendor:
+        return label
+    if "amd" in vendor or re.search(r"\bati\b", vendor):
+        return label if label.lower().startswith("amd") else f"AMD {label}"
+    return label
+
+
+def passthrough_addresses(options: dict[str, str]) -> list[str]:
+    """PCI functions handed to the guest through `hostpci`."""
+    keys = sorted(
+        (key for key in options if key.startswith("hostpci")),
+        key=lambda key: int(re.sub(r"\D", "", key) or 0),
+    )
+    addresses: list[str] = []
+    for key in keys:
+        raw = options[key]
+        # Resource mappings name a cluster file rather than a PCI address; do not
+        # guess one, because it may belong to a different node.
+        if "mapping=" in raw:
+            continue
+        for function in raw.split(",", 1)[0].split(";"):
+            candidate = function.strip()
+            if re.fullmatch(
+                r"(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]", candidate
+            ):
+                addresses.append(full_pci(candidate))
+    return addresses
+
+
+def render_node_address(options: dict[str, str]) -> str | None:
+    """PCI address of the host GPU that renders for a virtio-gl guest."""
+    match = re.search(r"pci-([0-9a-fA-F:.]+)-render", options.get("args", ""))
+    if match:
+        return full_pci(match.group(1))
+    try:
+        name = os.path.basename(os.path.realpath("/sys/class/drm/renderD128/device"))
+        if re.fullmatch(r"(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]", name):
+            return full_pci(name)
+    except OSError:
+        pass
+    return None
+
+
+def guest_gpu(vmid: int, running: bool) -> dict | None:
+    """The graphics device a VM's Proxmox config gives it, and its VRAM use."""
+    now = time.time()
+    cached = _gpu_cache.get(vmid)
+    if cached and now - cached[0] < GPU_TTL:
+        return cached[1]
+
+    options = vm_config(vmid)
+    found: dict | None = None
+
+    for address in passthrough_addresses(options):
+        device = pci_device(address)
+        if not device or not is_display(device):
+            continue
+        found = {"name": gpu_name(device), "mode": "passthrough", "address": address}
+        # Passthrough hides the GPU from the hypervisor, so a running Windows
+        # guest is the only place the adapter name and vRAM use exist.
+        if running:
+            measured = agent_gpu(vmid)
+            if measured:
+                if measured["name"]:
+                    found["name"] = measured["name"]
+                if measured["total"] > 0:
+                    found["memTotal"] = measured["total"]
+                    found["memUsed"] = measured["used"]
+        break
+
+    if not found and "virtio-gl" in options.get("vga", "").lower():
+        address = render_node_address(options)
+        if address:
+            device = pci_device(address)
+            if device and is_display(device):
+                found = {"name": gpu_name(device), "mode": "virtualized", "address": address}
+
+    _gpu_cache[vmid] = (now, found)
+    return found
 
 
 def qemu_disk_total(total: int, allocated: int, item: dict) -> int:
@@ -834,6 +1053,7 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                         mem_total = provisioned
                         mem_used = min(mem_total - min(mem_cache, mem_total), mem_used + gap)
 
+        gpu = guest_gpu(vmid, item.get("status") == "running") if kind == "qemu" else None
         guests.append(
             {
                 "vmid": vmid,
@@ -869,6 +1089,7 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 "memSource": mem_source,
                 "uptime": int(item.get("uptime") or 0),
                 "name": item.get("name"),
+                **({"gpu": gpu} if gpu else {}),
             }
         )
     guests.sort(key=lambda guest: guest["vmid"] or 0)

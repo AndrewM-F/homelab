@@ -1,10 +1,10 @@
 import { Show, type JSX } from 'solid-js'
-import { bytes, duration, percent, rate } from '../lib/format'
+import { bytes, duration, percent } from '../lib/format'
 import { resourceView, toggleResourceView } from '../lib/resource-view'
-import type { GuestStat, HostStat, Machine } from '../lib/types'
+import type { GpuStat, GuestStat, HostStat, Machine } from '../lib/types'
 import { CardMenu, type MenuItem } from './card-menu'
 import { Gauge } from './gauge'
-import { DownloadIcon, UploadIcon } from './icons'
+import { GpuIcon } from './icons'
 import { Logo } from './logo'
 import { Inline, Meter } from './meter'
 
@@ -57,6 +57,19 @@ export function MachineCard(props: Props): JSX.Element {
     return diskKnown()
       ? `${bytes(diskUsed())} / ${bytes(diskTotal())}`
       : `${bytes(diskAllocated())} alloc`
+  }
+
+  const gpuTitle = (gpu: GpuStat) => {
+    const mode =
+      gpu.mode === 'virtualized'
+        ? 'rendering this VM on the host (virtio-gl)'
+        : 'passed through to this VM'
+    const mem =
+      gpu.memTotal && gpu.memUsed != null
+        ? ` · ${bytes(gpu.memUsed)} of ${bytes(gpu.memTotal)} dedicated VRAM in use`
+        : ''
+    const address = gpu.address ? ` · PCI ${gpu.address}` : ''
+    return `${gpu.name} — ${mode}${address}${mem}`
   }
 
   const menuItems = (): MenuItem[] => {
@@ -189,18 +202,18 @@ export function MachineCard(props: Props): JSX.Element {
               ...(props.machine.tags?.length ? [{ label: '', value: props.machine.tags.join(' · ') }] : []),
             ]}
           />
-          <Show when={props.host}>
-            {(host) => (
-              <div class="net">
-                <span class="net-item" title={`received ${bytes(host().net.rx)}`}>
-                  <DownloadIcon />
-                  {rate(host().net.rxRate)}
-                </span>
-                <span class="net-item" title={`sent ${bytes(host().net.tx)}`}>
-                  <UploadIcon />
-                  {rate(host().net.txRate)}
-                </span>
-              </div>
+          <Show when={props.guest?.gpu}>
+            {(gpu) => (
+              <span class="gpu" title={gpuTitle(gpu())}>
+                <GpuIcon />
+                <span class="gpu-name">{gpu().name}</span>
+                <Show when={gpu().memTotal}>
+                  <span class="gpu-mem">
+                    {gpu().memUsed != null ? `${bytes(gpu().memUsed)} / ` : ''}
+                    {bytes(gpu().memTotal, 0)}
+                  </span>
+                </Show>
+              </span>
             )}
           </Show>
         </footer>

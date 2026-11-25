@@ -134,9 +134,27 @@ export const PRIVATE_SERVICE_FIELDS = [
   'probeTcp',
 ] as const
 
+export interface GpuStat {
+  /** Marketing name, e.g. "AMD Radeon Graphics" or "Intel Arc Pro B50". */
+  name: string
+  /**
+   * `passthrough` means the guest owns the PCI device; `virtualized` means the
+   * host GPU renders for this guest through virtio-gl.
+   */
+  mode: 'passthrough' | 'virtualized'
+  /** Full PCI address of the device. */
+  address?: string
+  /** Dedicated video memory in use, bytes. Only known for some guests. */
+  memUsed?: number
+  /** Total dedicated video memory, bytes. */
+  memTotal?: number
+}
+
 export interface GuestStat {
   /** A large non-root volume inside the guest (media array, NAS share). */
   diskExtra?: { label: string; used: number; total: number }
+  /** Graphics device attached to this guest, from its Proxmox configuration. */
+  gpu?: GpuStat
   vmid: number
   type: GuestType
   status: string
