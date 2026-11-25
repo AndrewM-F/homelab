@@ -635,6 +635,7 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
         # Splitting resident memory into "really used" and "page cache" needs the
         # guest's own MemAvailable, which neither pvesh nor the balloon reports.
         mem_cache = 0
+        provisioned_mem = int(item.get("maxmem") or 0)
         if kind == "lxc" and item.get("status") == "running":
             current, inactive = lxc_memory(vmid)
             if current > 0:
@@ -655,6 +656,15 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 else:
                     mem_used, mem_total, mem_cache = agent_used, agent_total, agent_cache
                     mem_source = "guest"
+                    # Measure against the memory the VM was given, and count the part
+                    # firmware and the kernel keep for themselves as used: it is not
+                    # memory the guest can hand back (Windows: 24 configured, 23.9
+                    # visible).
+                    provisioned = int(item.get("maxmem") or 0)
+                    if provisioned > mem_total:
+                        gap = provisioned - mem_total
+                        mem_total = provisioned
+                        mem_used = min(mem_total - min(mem_cache, mem_total), mem_used + gap)
 
         guests.append(
             {
@@ -670,10 +680,12 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 # never formats (ZimaOS leaves ~12 GiB of its 32 GiB to the OS image
                 # and overlay) as used, so the free figure on the card is the free
                 # space that actually exists.
-                "disk": qemu_disk_used(used, total, allocated, item)
-                if kind == "qemu"
-                else used,
-                "maxdisk": qemu_disk_total(total, allocated, item) if kind == "qemu" else total,
+                # Same rule for containers: measure against the provisioned rootfs
+                # and treat everything that is not writable free space as used, so
+                # a 40 GiB container reads 40 GiB rather than the filesystem's
+                # slightly smaller size.
+                "disk": qemu_disk_used(used, total, allocated, item),
+                "maxdisk": qemu_disk_total(total, allocated, item),
                 "diskAllocated": allocated,
                 "diskSource": source,
                 **(
