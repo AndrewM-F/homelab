@@ -5,6 +5,13 @@ const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 export function bytes(value: number | undefined | null, precision = 1): string {
   if (value === undefined || value === null || !Number.isFinite(value)) return '—'
   if (value < 1024) return `${Math.round(value)} B`
+  // A terabyte is how drives are sold, so from 1 TB up the scale divides in
+  // decimal: a 1 TB device reads "1 TB" instead of "932 GB", while a 96 GiB
+  // volume below that still reads "96 GB".
+  if (value >= 1e12) {
+    const terabytes = value / 1e12
+    return `${terabytes.toFixed(terabytes >= 100 ? 0 : precision)} TB`
+  }
   let unit = 0
   let n = value
   while (n >= 1024 && unit < UNITS.length - 1) {
