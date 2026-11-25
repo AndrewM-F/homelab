@@ -740,7 +740,7 @@ a.machine:hover h3 {
 
 /* Page cache: resident but reclaimable, so it reads calm next to the main arc. */
 .gauge-cache {
-  stroke: rgba(230, 237, 243, 0.32);
+  stroke: rgba(139, 152, 164, 0.85);
 }
 
 .gauge-label {

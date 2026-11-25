@@ -27,10 +27,9 @@ export function Gauge(props: Props): JSX.Element {
   const offset = () => ARC * (1 - clamped())
   // The cache band sits just inside the main arc and starts where it ends, so the
   // two together read as "resident", while the colour still follows real use.
+  // Drawn as a grey segment continuing along the same ring, so one arc carries
+  // both: real use in the severity colour, page cache in grey after it.
   const inner = () => Math.min(1 - clamped(), Math.max(0, Number.isFinite(props.inner ?? 0) ? (props.inner as number) : 0))
-  const INNER_RADIUS = RADIUS - STROKE - 1.5
-  const INNER_ARC = Math.PI * INNER_RADIUS
-  const innerPath = `M ${CENTER - INNER_RADIUS} ${CENTER} A ${INNER_RADIUS} ${INNER_RADIUS} 0 0 1 ${CENTER + INNER_RADIUS} ${CENTER}`
 
   return (
     <div class="gauge" title={`${props.label} ${props.center}${props.note ? ` · ${props.note}` : ''}`}>
@@ -54,12 +53,12 @@ export function Gauge(props: Props): JSX.Element {
         <Show when={inner() > 0.001}>
           <path
             class="gauge-cache"
-            d={innerPath}
+            d={`M ${CENTER - RADIUS} ${CENTER} A ${RADIUS} ${RADIUS} 0 0 1 ${CENTER + RADIUS} ${CENTER}`}
             fill="none"
-            stroke-width={2.5}
+            stroke-width={STROKE}
             stroke-linecap="butt"
-            stroke-dasharray={`${INNER_ARC * inner()} ${INNER_ARC}`}
-            stroke-dashoffset={-INNER_ARC * clamped()}
+            stroke-dasharray={`${ARC * inner()} ${ARC}`}
+            stroke-dashoffset={-ARC * clamped()}
           />
         </Show>
         <text class="gauge-center" x={CENTER} y={CENTER - 4} text-anchor="middle">
