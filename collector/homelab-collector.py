@@ -555,6 +555,23 @@ def agent_memory(vmid: int) -> tuple[int, int, int] | None:
     return result
 
 
+def qemu_disk_total(total: int, allocated: int, item: dict) -> int:
+    """The VM's provisioned disk size, which is what its card is measured against."""
+    return max(total, allocated, int(item.get("maxdisk") or 0))
+
+
+def qemu_disk_used(used: int, total: int, allocated: int, item: dict) -> int:
+    """
+    Used = provisioned - what the guest can actually still write.
+
+    A guest that formats only part of its disk would otherwise look emptier than
+    it is: the unformatted slice is not free space, it is gone.
+    """
+    provisioned = qemu_disk_total(total, allocated, item)
+    free = max(0, total - used)
+    return max(0, provisioned - free)
+
+
 def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]:
     """Live CPU/memory/disk for every VM and container, from the cluster API."""
     pvesh = shutil.which("pvesh")
@@ -649,13 +666,14 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 "mem": min(mem_used, mem_total),
                 "maxmem": mem_total,
                 "memCache": mem_cache,
-                # Report against what was provisioned, so the slice the guest never
-                # formats (ZimaOS leaves ~12 GiB of its 32 GiB to the OS image and
-                # overlay) counts as used headroom instead of vanishing from the card.
-                "disk": used,
-                "maxdisk": max(total, allocated, int(item.get("maxdisk") or 0))
+                # Report against what was provisioned, and count the slice the guest
+                # never formats (ZimaOS leaves ~12 GiB of its 32 GiB to the OS image
+                # and overlay) as used, so the free figure on the card is the free
+                # space that actually exists.
+                "disk": qemu_disk_used(used, total, allocated, item)
                 if kind == "qemu"
-                else total,
+                else used,
+                "maxdisk": qemu_disk_total(total, allocated, item) if kind == "qemu" else total,
                 "diskAllocated": allocated,
                 "diskSource": source,
                 **(
