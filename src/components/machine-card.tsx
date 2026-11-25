@@ -1,7 +1,7 @@
 import { Show, type JSX } from 'solid-js'
 import { bytes, duration, percent, rate } from '../lib/format'
 import { resourceView, toggleResourceView } from '../lib/resource-view'
-import type { DiskStat, GuestStat, HostStat, Machine } from '../lib/types'
+import type { GuestStat, HostStat, Machine } from '../lib/types'
 import { CardMenu, type MenuItem } from './card-menu'
 import { Gauge } from './gauge'
 import { DownloadIcon, UploadIcon } from './icons'
@@ -12,7 +12,6 @@ interface Props {
   machine: Machine
   guest?: GuestStat
   host?: HostStat
-  disk?: DiskStat
   /** `undefined` means unknown — a device with no metrics agent, or no sample yet. */
   online?: boolean
   /** Whether this machine *can* report metrics, independent of the current sample. */
@@ -26,11 +25,12 @@ export function MachineCard(props: Props): JSX.Element {
   const cpu = () => (props.guest ? props.guest.cpu : (props.host?.cpu ?? 0))
   const memUsed = () => (props.guest ? props.guest.mem : (props.host?.memUsed ?? 0))
   const memTotal = () => (props.guest ? props.guest.maxmem : (props.host?.memTotal ?? 0))
-  const diskUsed = () =>
-    props.guest ? props.guest.disk : (props.disk?.used ?? props.host?.disk ?? 0)
-  const diskTotal = () =>
-    props.guest ? props.guest.maxdisk : (props.disk?.total ?? props.host?.diskTotal ?? 0)
-  const diskAllocated = () => (props.guest ? props.guest.diskAllocated : (props.disk?.total ?? 0))
+  // The host's disk is the provisioned root volume, not the raw filesystem
+  // sample: a 96 GiB volume formats to 93.9 GiB and the card must show 96.
+  const diskUsed = () => (props.guest ? props.guest.disk : (props.host?.disk ?? 0))
+  const diskTotal = () => (props.guest ? props.guest.maxdisk : (props.host?.diskTotal ?? 0))
+  const diskAllocated = () =>
+    props.guest ? props.guest.diskAllocated : (props.host?.diskTotal ?? 0)
   const uptime = () => (props.guest ? props.guest.uptime : (props.host?.uptime ?? 0))
   const cores = () => props.guest?.maxcpu ?? props.host?.cores ?? 0
   const coreLabel = () => `${cores()} core${cores() === 1 ? '' : 's'}`
