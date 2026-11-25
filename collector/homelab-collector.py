@@ -61,6 +61,8 @@ _agent_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
 # showing, but it is not the machine's own disk, so it rides along separately.
 _disk_extra: dict[int, tuple[int, int, str]] = {}
 _ssh_cache: dict[int, tuple[float, tuple[int, int, str] | None]] = {}
+# Writable free space inside a container's rootfs, read with `df` in the guest.
+_lxc_disk_cache: dict[int, tuple[float, int | None]] = {}
 # Machines that are not Proxmox guests report through their own probe script.
 MACHINE_TTL = 30.0
 _machine_cache: dict[str, tuple[float, dict | None]] = {}
@@ -678,6 +680,46 @@ def lxc_disk_total(vmid: int, fallback: int) -> int:
     return fallback
 
 
+def lxc_available(vmid: int) -> int | None:
+    """
+    Writable free space inside a running container's rootfs, in bytes.
+
+    pvesh's `disk` figure is the filesystem's *used* count, which leaves out the
+    blocks ext4 reserves for root (5% by default). The host card and the Mac are
+    measured against writable free space, so ask the container directly with the
+    same `df` the SSH probe uses, and cache it like the other slow lookups.
+    """
+    now = time.time()
+    cached = _lxc_disk_cache.get(vmid)
+    if cached and now - cached[0] < AGENT_TTL:
+        return cached[1]
+
+    available: int | None = None
+    pct = shutil.which("pct")
+    if pct:
+        try:
+            out = subprocess.run(
+                [pct, "exec", str(vmid), "--", "df", "-B1", "/"],
+                capture_output=True,
+                text=True,
+                timeout=AGENT_TIMEOUT,
+                check=False,
+            )
+            if out.returncode == 0:
+                rows = [line for line in out.stdout.splitlines() if line.strip()]
+                # `df -B1 /` prints a header and one row: filesystem, size,
+                # used, available, use%, mountpoint.
+                if len(rows) >= 2:
+                    fields = rows[-1].split()
+                    if len(fields) >= 4:
+                        available = max(0, int(fields[3]))
+        except Exception:  # noqa: BLE001 - a container without df is not fatal
+            available = None
+
+    _lxc_disk_cache[vmid] = (now, available)
+    return available
+
+
 def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]:
     """Live CPU/memory/disk for every VM and container, from the cluster API."""
     pvesh = shutil.which("pvesh")
@@ -727,6 +769,26 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
             if measured:
                 used, total, _mount = measured
                 source = "guest"
+
+        if kind == "lxc":
+            provisioned = lxc_disk_total(vmid, allocated)
+            if item.get("status") == "running":
+                # A running container always reports usage, even when it is zero.
+                source = "guest"
+                available = lxc_available(vmid)
+                disk_used = (
+                    max(0, provisioned - available)
+                    if available is not None
+                    else qemu_disk_used(used, total, provisioned, item)
+                )
+            else:
+                disk_used = qemu_disk_used(used, total, provisioned, item)
+            disk_total = provisioned
+            disk_allocated = provisioned
+        else:
+            disk_total = qemu_disk_total(total, allocated, item)
+            disk_used = qemu_disk_used(used, total, allocated, item)
+            disk_allocated = allocated
 
         mem_used = int(item.get("mem") or 0)
         mem_total = int(item.get("maxmem") or 0)
@@ -786,19 +848,12 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 # never formats (ZimaOS leaves ~12 GiB of its 32 GiB to the OS image
                 # and overlay) as used, so the free figure on the card is the free
                 # space that actually exists.
-                # Same rule for containers: measure against the provisioned rootfs
-                # and treat everything that is not writable free space as used, so
-                # a 40 GiB container reads 40 GiB rather than the filesystem's
-                # slightly smaller size.
-                "disk": qemu_disk_used(
-                    used, total, lxc_disk_total(vmid, allocated) if kind == "lxc" else allocated, item
-                ),
-                "maxdisk": (
-                    lxc_disk_total(vmid, qemu_disk_total(total, allocated, item))
-                    if kind == "lxc"
-                    else qemu_disk_total(total, allocated, item)
-                ),
-                "diskAllocated": allocated,
+                # Containers use the same rule: writable free space inside the
+                # guest, so ext4's root-reserved blocks and the metadata slice are
+                # counted rather than quietly shrinking the denominator.
+                "disk": disk_used,
+                "maxdisk": disk_total,
+                "diskAllocated": disk_allocated,
                 "diskSource": source,
                 **(
                     {

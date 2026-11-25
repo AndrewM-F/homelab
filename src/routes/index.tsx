@@ -225,7 +225,6 @@ function Dashboard() {
           : guestByVmid().get(machine.vmid)
       }
       host={kindOf(machine) === 'hypervisor' ? snapshot()?.host : undefined}
-      disk={kindOf(machine) === 'hypervisor' ? snapshot()?.disks?.[0] : undefined}
       online={isOnline(machine)}
       meterable={isMeterable(machine)}
     />

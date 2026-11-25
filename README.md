@@ -213,14 +213,21 @@ an SSH check, a distant host) cannot drag a request past the dashboard's timeout
 #### Where disk numbers come from
 
 Proxmox reports usage for containers but only *provisioned size* for VMs, so the
-collector tries three sources and records which one it used (`diskSource`):
+collector tries four sources and records which one it used (`diskSource`):
 
 | Guest | Source |
 | --- | --- |
-| container | `pvesh` rootfs usage |
+| container | `pvesh` config for the provisioned size; `df -B1 /` inside the guest for writable free (cached 60s) |
 | VM | QEMU guest agent filesystem table, root mount preferred (cached 60s) |
 | appliance that cannot run the agent | `df` over SSH, from `machine.diskProbe` |
 | machine that is not a guest at all | a probe script on the host, from `machine.remoteStats` |
+
+Every disk figure uses the same rule: the denominator is the size that was
+provisioned, and anything that is not writable free space counts as used — the
+unformatted slice, ext4 metadata, and the blocks ext4 reserves for root. A 96 GiB
+volume that formats to 93.9 GiB therefore reads `used / 96`, not `used / 93.9`.
+The hypervisor is measured the same way (provisioned root LV minus `f_bavail`),
+as is the MacBook (device size minus `df` available).
 
 Memory works the same way: containers report it, balloooned VMs report it, and a
 VM with **PCIe passthrough** cannot balloon at all — the guest's memory has to

@@ -252,6 +252,11 @@ export interface Snapshot {
   /** Samples for non-guest machines (a laptop on the tailnet, for example). */
   hosts: HostSample[]
   probes: ProbeResult[]
+  /**
+   * Raw filesystem samples, `used`/`total` as `df` reports them. These are not
+   * capacity figures — a 96 GiB volume formats to 93.9 GiB. Cards measure
+   * against the provisioned size (`host.diskTotal` or `GuestStat.maxdisk`).
+   */
   disks: DiskStat[]
   /** UPS state, when the collector is configured with a NUT device. */
   ups?: UpsStat | null
