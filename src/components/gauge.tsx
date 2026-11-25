@@ -47,7 +47,7 @@ export function Gauge(props: Props): JSX.Element {
             d={`M ${CENTER - RADIUS} ${CENTER} A ${RADIUS} ${RADIUS} 0 0 1 ${CENTER + RADIUS} ${CENTER}`}
             fill="none"
             stroke-width={STROKE}
-            stroke-linecap="butt"
+            stroke-linecap="round"
             stroke-dasharray={`${ARC * inner()} ${ARC}`}
             stroke-dashoffset={-ARC * clamped()}
           />
