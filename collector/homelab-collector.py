@@ -617,6 +617,36 @@ def qemu_disk_used(used: int, total: int, allocated: int, item: dict) -> int:
     return max(0, provisioned - free)
 
 
+def lxc_disk_total(vmid: int, fallback: int) -> int:
+    """
+    Provisioned rootfs size of a container, in bytes.
+
+    pvesh reports the *filesystem* size for a container, which is a little smaller
+    than the volume it was given (a 48 GiB volume formats to ~43.7 GiB). The
+    container's own config states the size that was provisioned, which is what the
+    card is measured against.
+    """
+    units = {"K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4}
+    try:
+        with open(f"/etc/pve/lxc/{vmid}.conf", "r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.startswith("rootfs:"):
+                    continue
+                for part in line.split(","):
+                    part = part.strip()
+                    if not part.startswith("size="):
+                        continue
+                    raw = part[len("size="):].strip()
+                    suffix = raw[-1:].upper()
+                    if suffix in units:
+                        return int(float(raw[:-1]) * units[suffix])
+                    if raw.isdigit():
+                        return int(raw)
+    except OSError:
+        pass
+    return fallback
+
+
 def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]:
     """Live CPU/memory/disk for every VM and container, from the cluster API."""
     pvesh = shutil.which("pvesh")
@@ -729,8 +759,14 @@ def guest_stats(warnings: list[str], disk_probes: dict[int, dict]) -> list[dict]
                 # and treat everything that is not writable free space as used, so
                 # a 40 GiB container reads 40 GiB rather than the filesystem's
                 # slightly smaller size.
-                "disk": qemu_disk_used(used, total, allocated, item),
-                "maxdisk": qemu_disk_total(total, allocated, item),
+                "disk": qemu_disk_used(
+                    used, total, lxc_disk_total(vmid, allocated) if kind == "lxc" else allocated, item
+                ),
+                "maxdisk": (
+                    lxc_disk_total(vmid, qemu_disk_total(total, allocated, item))
+                    if kind == "lxc"
+                    else qemu_disk_total(total, allocated, item)
+                ),
                 "diskAllocated": allocated,
                 "diskSource": source,
                 **(
