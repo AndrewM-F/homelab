@@ -1,0 +1,124 @@
+# Source of truth for /etc/gitlab-runner/config.toml on the gitlab LXC.
+#
+# This file is NOT deployed verbatim: the four `token` values are placeholders
+# here and real runner tokens must be pasted in from GitLab before use. That is
+# the only difference -- everything else is what runs.
+#
+# Why it lives in git: the deployed config had drifted from every copy of it, and
+# carried `request_concurrency` at the top level, which is not a valid key there.
+# `gitlab-runner lint` rejected the whole file over it and the runner silently
+# ignored the setting. Nothing caught either problem because nothing had a copy.
+#
+# Validate any edit before reloading it on the box:
+#
+#   gitlab-runner lint --config collector/gitlab-runner.toml
+#   pct exec <gitlab-vmid> -- gitlab-runner lint --config /etc/gitlab-runner/config.toml
+#
+# Then reload, which is graceful and does not disturb running jobs:
+#
+#   pct exec <gitlab-vmid> -- systemctl reload gitlab-runner
+#
+# Managed by the homelab CI migration. One pool per line of work, all on the
+# same native x86-64 Docker daemon so image layers and volumes are shared.
+#
+# The pools add up to the host exactly: 0.5x2 + 1x1 + 2x2 + 3x2 = 12 CPUs and
+# 2+2+8+12 = 24 GiB, and `concurrent` equals their sum. A job's slot is a hard
+# cgroup cap, so that sum is the host's ceiling, not an oversubscription.
+#
+# /srv/mise and /srv/builds are real host paths. A bare "/mise" is an anonymous
+# volume: every job would start with an empty tool cache and an empty checkout,
+# so `mise install` re-downloads the toolchain for every job. Keep the two paths
+# absolute and separated by a colon.
+#
+# shm_size is a count of bytes, and it is /dev/shm for a Chromium in the job.
+# The 64 MiB default is far below what Playwright needs.
+concurrent = 7
+# request_concurrency is a per-runner key, not a top-level one. Set here it was
+# rejected by `gitlab-runner lint` as an unknown key and silently ignored; each
+# [[runners]] block below carries its own.
+# request_concurrency = 2
+check_interval = 3
+log_level = "info"
+
+[session_server]
+  session_timeout = 1800
+
+[[runners]]
+  name = "linux tiny (MS-A2: Docker)"
+  url = "https://gitlab.com"
+  token = "<RUNNER_TOKEN_FROM_GITLAB>"
+  executor = "docker"
+  environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
+  limit = 2
+  request_concurrency = 4
+  output_limit = 8192
+  [runners.docker]
+    image = "ubuntu:24.04"
+    privileged = false
+    cpus = "0.5"
+    memory = "1g"
+    pull_policy = ["if-not-present"]
+    extra_hosts = ["host.docker.internal:host-gateway"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    shm_size = 0
+    tls_verify = false
+
+[[runners]]
+  name = "linux small (MS-A2: Docker)"
+  url = "https://gitlab.com"
+  token = "<RUNNER_TOKEN_FROM_GITLAB>"
+  executor = "docker"
+  environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
+  limit = 1
+  request_concurrency = 4
+  output_limit = 8192
+  [runners.docker]
+    image = "ubuntu:24.04"
+    privileged = false
+    cpus = "1"
+    memory = "2g"
+    pull_policy = ["if-not-present"]
+    extra_hosts = ["host.docker.internal:host-gateway"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    shm_size = 268435456
+    tls_verify = false
+
+[[runners]]
+  name = "linux medium (MS-A2: Docker)"
+  url = "https://gitlab.com"
+  token = "<RUNNER_TOKEN_FROM_GITLAB>"
+  executor = "docker"
+  environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
+  limit = 2
+  request_concurrency = 3
+  output_limit = 8192
+  [runners.docker]
+    image = "ubuntu:24.04"
+    privileged = false
+    cpus = "2"
+    memory = "4g"
+    pull_policy = ["if-not-present"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    extra_hosts = ["host.docker.internal:host-gateway"]
+    shm_size = 536870912
+    tls_verify = false
+
+[[runners]]
+  name = "linux medium+ (MS-A2: Docker)"
+  url = "https://gitlab.com"
+  token = "<RUNNER_TOKEN_FROM_GITLAB>"
+  executor = "docker"
+  environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
+  limit = 2
+  request_concurrency = 2
+  output_limit = 8192
+  [runners.docker]
+    image = "ubuntu:24.04"
+    privileged = false
+    cpus = "3"
+    memory = "6g"
+    pull_policy = ["if-not-present"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    extra_hosts = ["host.docker.internal:host-gateway"]
+    shm_size = 536870912
+    tls_verify = false
