@@ -1,0 +1,11 @@
+[Unit]
+Description=CI admission guard
+
+[Timer]
+# Same reasoning as the disk guard: a burst can add several jobs inside one pipeline
+# minute, and the script is a couple of file reads when nothing is wrong.
+OnCalendar=*:0/1
+Persistent=true
+
+[Install]
+WantedBy=timers.target

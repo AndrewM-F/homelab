@@ -4,6 +4,17 @@
 # here and real runner tokens must be pasted in from GitLab before use. That is
 # the only difference -- everything else is what runs.
 #
+# ONE LINE IS MANAGED AT RUNTIME: `concurrent`. ci-admission.sh rewrites it and
+# SIGHUPs the runner when measured memory crosses a threshold, so the value here is
+# the MAXIMUM, not necessarily what is live. Reading `concurrent` off this file while
+# debugging is therefore a mistake -- read it off the box, or read the ci-admission
+# log. Everything else in this file is static.
+#
+# The per-runner `limit`s are deliberately NOT the constraint: each is set to what
+# that tier alone could fill (cores / per-slot CPU, memory / per-slot GiB), so any one
+# tier can use the whole host when it is the only one with work. `concurrent` above
+# them is the single governor.
+#
 # Why it lives in git: the deployed config had drifted from every copy of it, and
 # carried `request_concurrency` at the top level, which is not a valid key there.
 # `gitlab-runner lint` rejected the whole file over it and the runner silently
@@ -42,7 +53,7 @@
 #
 # shm_size is a count of bytes, and it is /dev/shm for a Chromium in the job.
 # The 64 MiB default is far below what Playwright needs.
-concurrent = 7
+concurrent = 12
 # request_concurrency is a per-runner key, not a top-level one. Set here it was
 # rejected by `gitlab-runner lint` as an unknown key and silently ignored; each
 # [[runners]] block below carries its own.
@@ -59,7 +70,7 @@ log_level = "info"
   token = "<RUNNER_TOKEN_FROM_GITLAB>"
   executor = "docker"
   environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
-  limit = 2
+  limit = 24
   request_concurrency = 4
   output_limit = 8192
   [runners.docker]
@@ -79,7 +90,7 @@ log_level = "info"
   token = "<RUNNER_TOKEN_FROM_GITLAB>"
   executor = "docker"
   environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
-  limit = 1
+  limit = 12
   request_concurrency = 4
   output_limit = 8192
   [runners.docker]
@@ -99,7 +110,7 @@ log_level = "info"
   token = "<RUNNER_TOKEN_FROM_GITLAB>"
   executor = "docker"
   environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
-  limit = 2
+  limit = 6
   request_concurrency = 3
   output_limit = 8192
   [runners.docker]
@@ -119,7 +130,7 @@ log_level = "info"
   token = "<RUNNER_TOKEN_FROM_GITLAB>"
   executor = "docker"
   environment = ["ADEA_RUNNER_PLATFORM=linux/amd64"]
-  limit = 2
+  limit = 4
   request_concurrency = 2
   output_limit = 8192
   [runners.docker]

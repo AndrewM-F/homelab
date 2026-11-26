@@ -88,6 +88,9 @@ collector/
   ci-prune.sh             runner disk guard (runs on the gitlab LXC)
   ci-prune.service
   ci-prune.timer
+  ci-admission.py         runner queue governor (runs on the gitlab LXC)
+  ci-admission.service
+  ci-admission.timer
   lxc-fstrim.sh           returns freed blocks to the thin pool (hypervisor)
   lxc-fstrim.service
   lxc-fstrim.timer
@@ -456,6 +459,54 @@ pct push <gitlab-vmid> /root/ci-prune.sh /usr/local/sbin/ci-prune.sh
 
 Rehearse a change with `DRY_RUN=1 /usr/local/sbin/ci-prune.sh`, which prints every
 action it would take and performs none.
+
+## The runner queue governor
+
+GitLab has no resource model for runners. `concurrent` and each runner's `limit`
+are plain semaphores and tag matching is a hard partition, so nothing in GitLab can
+say "24 tiny jobs fit alongside 4 medium+". The only admission control it offers is
+the size of the slot pool: **a runner takes a job when it polls, and not before.**
+That is the queue we manage — shrink `concurrent` and jobs wait in GitLab, which is
+exactly where they should wait.
+
+So `collector/ci-admission.{py,service,timer}` is the middleware, in the only form
+GitLab permits:
+
+- **Per-runner `limit`s are not the constraint.** Each is set to what that tier alone
+  could fill — cores / per-slot CPU, memory / per-slot GiB — so any one tier can use
+  the whole host when it is the only one with work. That is 24/12/6/4.
+- **`concurrent` is the single governor**, rewritten at runtime from measured CPU
+  **utilisation**: below `LOW_UTIL` add two slots, above `HIGH_UTIL` shed two, else
+  hold. Shedding never kills a job; it stops new pickups until the count falls, so the
+  queue builds in GitLab, which is where it belongs.
+
+Why utilisation, and not the two obvious alternatives — both rejected on measurement:
+
+```
+summing each job's CPU quota   overestimates 4x on some jobs, and cannot tell
+                               a job saturating its 2-core cap (188%, 196%)
+                               from one that is fsync-bound (0.64%)
+cgroup cpu.pressure            conflates "this job over-threads its own quota"
+                               with "the host has no cores left": one job with 8
+                               threads on a 2-core quota reads as starvation while
+                               ten cores idle
+aggregate CPU utilisation      what the question actually asks: is the compute
+                               there and sitting idle
+```
+
+Utilisation is `usage_usec` over wall-clock divided by the cores, so the governor is a
+plain feedback loop with no model of job types. It is deliberately asymmetric —
+adding is cheap, shedding protects the latency of jobs already running — and
+rate-limited by a cooldown so it cannot flap.
+
+`cpu.pressure` is still logged as context, and memory is checked as a **backstop**:
+anon peaked at **5.9 GiB of 24 across 8 concurrent jobs, ~0.73 GiB/job**, so CPU is the
+binding resource on this host, not RAM. The backstop exists for what that sampling did
+not cover — a leaking job, a ballooning build — because an OOM here kills the runner
+and every job on it, and the container has no swap.
+
+README-grade warning: `concurrent` in `collector/gitlab-runner.toml` is the
+**maximum**, not necessarily the live value. Read it off the box when debugging.
 
 ## What is deliberately not here
 

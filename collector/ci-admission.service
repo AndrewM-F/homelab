@@ -1,0 +1,8 @@
+[Unit]
+Description=Govern the CI queue from measured demand
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ci-admission.py
