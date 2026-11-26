@@ -30,7 +30,7 @@ Band, deliberately asymmetric -- adding slots is cheap and reversible, shedding 
 protects the latency of jobs already running, so it moves down faster than up:
 
     util < LOW_UTIL   -> add  SLOTS_UP     (spare compute: admit more)
-    util > HIGH_UTIL  -> shed SLOTS_DOWN   (saturated: stop admitting)
+    util > HIGH_UTIL  -> shed to 2/3       (saturated: stop admitting)
     in between        -> hold
 
 Measured on this host 2026-11-26: cgroup anon peaked at 5.9 GiB of 24 across 8
@@ -62,8 +62,12 @@ MAX_SLOTS = int(os.environ.get("MAX_SLOTS", "24"))
 MIN_SLOTS = int(os.environ.get("MIN_SLOTS", "4"))
 LOW_UTIL = float(os.environ.get("LOW_UTIL", "55"))
 HIGH_UTIL = float(os.environ.get("HIGH_UTIL", "90"))
-SLOTS_UP = int(os.environ.get("SLOTS_UP", "2"))
-SLOTS_DOWN = int(os.environ.get("SLOTS_DOWN", "2"))
+SLOTS_UP = int(os.environ.get("SLOTS_UP", "1"))
+# Shed a third, not a fixed step: an idle box climbs to MAX_SLOTS, and a fixed step of
+# two would take ten cooldowns to walk back down from 24 once a heavy pipeline lands.
+# Proportional retreat reaches a sane level in three ticks and stays honest as MAX grows.
+SHED_NUMERATOR = int(os.environ.get("SHED_NUMERATOR", "2"))   # keep 2/3 of the slots
+SHED_DENOMINATOR = int(os.environ.get("SHED_DENOMINATOR", "3"))
 HIGH_ANON_GIB = float(os.environ.get("HIGH_ANON_GIB", "16"))
 COOLDOWN_SECONDS = int(os.environ.get("COOLDOWN_SECONDS", "120"))
 DRY_RUN = os.environ.get("DRY_RUN", "0") == "1"
@@ -186,8 +190,11 @@ def main() -> int:
 
     target = cur
     if util > HIGH_UTIL:
-        target = cur - SLOTS_DOWN
-        why = f"util {util:.0f}% > {HIGH_UTIL:.0f}%: saturated, shedding {SLOTS_DOWN}"
+        target = cur * SHED_NUMERATOR // SHED_DENOMINATOR
+        why = (
+            f"util {util:.0f}% > {HIGH_UTIL:.0f}%: saturated, shedding "
+            f"{cur} -> {SHED_NUMERATOR}/{SHED_DENOMINATOR}"
+        )
     elif util < LOW_UTIL:
         target = cur + SLOTS_UP
         why = f"util {util:.0f}% < {LOW_UTIL:.0f}%: spare compute, adding {SLOTS_UP}"
@@ -195,7 +202,7 @@ def main() -> int:
         why = f"util {util:.0f}% within band"
 
     if anon >= HIGH_ANON_GIB:
-        target = min(target, cur - SLOTS_DOWN)
+        target = min(target, cur * SHED_NUMERATOR // SHED_DENOMINATOR)
         why += f"; anon {anon:.1f}G >= {HIGH_ANON_GIB}G: shedding"
 
     target = max(MIN_SLOTS, min(MAX_SLOTS, target))
