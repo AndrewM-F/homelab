@@ -1,6 +1,6 @@
 #!/bin/bash
 # Keep the CI caches bounded without ever letting the disk fill, and without
-# ever touching a job that is still running.
+# ever disturbing a job that is still running.
 #
 # A budget, not a watermark. The watermark version did nothing below 90% and then
 # reclaimed with `docker volume prune -af`, which drops every unused volume at
@@ -10,50 +10,65 @@
 # space left over.
 #
 # The budget has to be ABOVE what the runner legitimately keeps, or the script
-# escalates forever. At 22 GB it was unreachable on this host: /srv/mise alone is
-# 13 GB of warm tool cache, the checkouts are 6.5 GB and the OS is 4.8 GB, so the
-# floor was 24 GB before a single image or volume. Every one of the 132 runs on
-# 2026-11-26 went past "within budget" and reached the Docker prunes. 34 GB on the
-# 48 GB disk leaves ~14 GB free for a suite's own scratch and an image pull, and
-# is reachable, so the common path is now a log line and an exit.
+# escalates forever and the Docker prunes run on every tick. That is not a
+# theoretical concern: at TARGET 22 on a 48 GB disk, 132 of the 132 runs in a day
+# went past "within budget", because /srv/mise alone is 13 GB of warm tool cache,
+# the checkouts are 6.5 GB and the OS is 4.8 GB -- 24 GB before a single image.
+# The numbers below are measured from this host's own journal (730 samples over
+# 24 h, 2026-11-25/26):
+#
+#   warm steady state        33-35 GB
+#   observed peak            40 GB   (85% of the then-48 GB disk)
+#   samples above 38 GB      2.3%    -> TARGET 38 acts on about one tick in forty
+#   samples above 34 GB      29%     -> TARGET 34 would act on one tick in three
+#
+# 38 is therefore the smallest budget that lets the common path be "one log line
+# and an exit". The disk is 64 GB, so 38 GB leaves ~25 GB free: room for a suite's
+# own scratch, an image pull, and a newly provisioned runner pool (~5 GB of fresh
+# checkouts, which is what the single +9 GB one-minute jump on 2026-11-26 00:00
+# turned out to be -- not image pulls).
 #
 # Order: job temp folders (always), then the checkouts on the builds volume, then
 # cold Docker volumes, then images and the build cache, then (only past the hard
 # budget) tagged images no container references. The percentage threshold remains
 # as the last-resort guard.
 #
-# Race rules, each learned from a real failure:
+# One invariant makes this safe to reason about:
 #
-#   * `docker container prune -f` with no `until` filter deletes the runner's
-#     stopped `<job>...-predefined` helper container in the instant the executor
-#     starts or removes it, and the job dies with
-#     "container is marked for removal and cannot be started" and
-#     failure_reason=runner_system_failure. Every such failure on 2026-11-26
-#     landed 0.06-0.29 s after this timer fired. A live job's helper container is
-#     seconds old, so `--filter until=1h` provably cannot select it, while a
-#     truly leaked container from an old job is still collected.
-#   * Image and builder pruning race a job's own image pull and leave the
-#     containerd content store reporting "parent snapshot does not exist", so they
-#     only run when no job container is in flight.
-#   * Volume removal only ever touches volumes that no container references, so it
-#     cannot touch one that is in use, and stays safe mid-run.
-#   * `until=30*24h` is not a duration: Docker rejects it with
-#     `invalid seconds "30*24h"` and the tagged-image prune failed on every run,
-#     leaving every stale image in place. The value is computed to hours instead.
+#   No Docker write is ever issued while a job container exists.
+#
+# Every line below that deletes something either checks that invariant, or only
+# touches an entry that provably cannot be in use. Each rule cost a real failure:
+#
+#   * `docker container prune -f` with no age filter deletes the runner's stopped
+#     `<job>...-predefined` helper container in the instant the executor starts or
+#     removes it, and the job dies with "container is marked for removal and
+#     cannot be started" / failure_reason=runner_system_failure. Every one of the
+#     8 such failures on 2026-11-26 landed 0.06-0.29 s after this timer fired. Now
+#     it runs only with no job container in flight, and carries `until=1h` anyway
+#     so that a mis-counted job still cannot be selected.
+#   * Image and builder pruning race a job's own pull and leave the containerd
+#     content store reporting "parent snapshot does not exist" (3 occurrences).
+#     Idle-only.
+#   * A `.git` nested inside another working tree is a fixture repo committed in
+#     the tree, not a checkout. Treating it as one deleted part of a live job.
+#   * Job temp folders were aged on the folder's own mtime, which a job writing
+#     deeper never updates. Age on the newest content instead.
+#   * `until=30*24h` is not a duration: Docker rejected it with
+#     `invalid seconds "30*24h"` on every single run, so every stale image stayed.
+#     The value is computed to hours instead.
 
 set -u
 
 FS=/
 BUILDS=${BUILDS_DIR:-/srv/builds}
-# The whole disk is 48 GB. 34 GB used leaves ~14 GB free: enough for a suite run's
-# own scratch, the images a run pulls and the build cache, without letting the
-# cache pretend it owns the disk.
-TARGET_USED_GB=${TARGET_USED_GB:-34}
-# Past this, images and the builder cache go too, still cold-first.
-HARD_USED_GB=${HARD_USED_GB:-40}
-# Never finish above this, whatever the budget says.
+# Start reclaiming above this, and stop as soon as we are back under it.
+TARGET_USED_GB=${TARGET_USED_GB:-38}
+# Past this, tagged images and the build cache go too, still cold-first.
+HARD_USED_GB=${HARD_USED_GB:-48}
+# Never finish below this much free, whatever the budget says.
 FLOOR_FREE_GB=${FLOOR_FREE_GB:-8}
-EMERGENCY=${EMERGENCY:-95}
+EMERGENCY=${EMERGENCY:-90}
 # A container younger than this belongs to a job that may still be running, so it
 # is never a prune candidate. Every job on this host finishes inside ~3 minutes.
 CONTAINER_GRACE=${CONTAINER_GRACE:-1h}
@@ -70,21 +85,31 @@ run() {
   if [ "$DRY" = 1 ]; then echo "  would: $*"; else "$@" 2>&1 | tail -1 | sed 's/^/  /'; fi
 }
 
-used_gb() { df -B1G --output=used "$FS" | tail -1 | tr -dc '0-9'; }
-free_gb() { df -B1G --output=avail "$FS" | tail -1 | tr -dc '0-9'; }
-pct()     { df --output=pcent "$FS" | tail -1 | tr -dc '0-9'; }
-jobs()    { docker ps --format '{{.Names}}' 2>/dev/null | grep -cE -- '-build$|-predefined$'; }
+used_gb()  { df -B1G --output=used "$FS" | tail -1 | tr -dc '0-9'; }
+free_gb()  { df -B1G --output=avail "$FS" | tail -1 | tr -dc '0-9'; }
+total_gb() { df -B1G --output=size "$FS" | tail -1 | tr -dc '0-9'; }
+pct()      { df --output=pcent "$FS" | tail -1 | tr -dc '0-9'; }
+jobs()     { docker ps --format '{{.Names}}' 2>/dev/null | grep -cE -- '-build$|-predefined$'; }
 over_budget() { [ "$(used_gb)" -gt "$TARGET_USED_GB" ] || [ "$(free_gb)" -lt "$FLOOR_FREE_GB" ]; }
+# Keep reclaiming while the disk is above <limit> GB used.
+above() { [ "$(used_gb)" -gt "$1" ]; }
 
-# The only container prune this script is allowed to run. Bare `docker container
-# prune` is what killed jobs here; the age filter is what makes this safe, so do
-# not "simplify" it back.
+# The only container prune this script is allowed to run, and only when the box
+# is otherwise idle. Both halves matter: the idle check keeps it away from a job
+# that is mid-phase, the age filter keeps it away from a job we failed to count.
+# Do not "simplify" either one back.
 prune_containers() {
+  local busy
+  busy=$(jobs)
+  if [ "$busy" -gt 0 ]; then
+    echo "  ${busy} job container(s) in flight: containers left alone"
+    return 0
+  fi
   run docker container prune -f --filter "until=${CONTAINER_GRACE}"
 }
 
-# Images and the builder cache are only pruned when the runner is idle: both race
-# a job's image pull.
+# Images and the builder cache race a job's image pull, so they only move when the
+# runner is idle.
 prune_images_if_idle() {
   local busy
   busy=$(jobs)
@@ -101,47 +126,75 @@ prune_images_if_idle() {
 # says, so it is collected first and unconditionally.
 prune_job_temp() {
   [ -d "$BUILDS/.tmp" ] || return 0
-  stale=$(find "$BUILDS/.tmp" -mindepth 1 -maxdepth 1 -type d -mmin +"$JOB_TMP_MINUTES" 2>/dev/null)
-  [ -n "$stale" ] || return 0
-  count=$(echo "$stale" | wc -l)
+  local stale=() d
+  for d in "$BUILDS/.tmp"/*/; do
+    [ -d "$d" ] || continue
+    # Age on the newest content, never on the folder's own mtime: a job writing
+    # into a subdirectory leaves the top-level mtime untouched and old.
+    [ -n "$(find "$d" -newermt "-${JOB_TMP_MINUTES} minutes" -print -quit 2>/dev/null)" ] && continue
+    stale+=("$d")
+  done
+  [ "${#stale[@]}" -gt 0 ] || return 0
   if [ "$DRY" = 1 ]; then
-    echo "  would: remove ${count} job temp folder(s) under $BUILDS/.tmp"
+    echo "  would: remove ${#stale[@]} job temp folder(s) under $BUILDS/.tmp"
   else
-    echo "$stale" | xargs -r rm -rf
-    echo "  job temp folders older than $((JOB_TMP_MINUTES / 60))h removed: ${count}"
+    rm -rf "${stale[@]}"
+    echo "  job temp folders idle ${JOB_TMP_MINUTES}m+: ${#stale[@]}"
   fi
+}
+
+# A checkout root is the working tree the runner clones. A .git deeper inside one
+# (a fixture repo committed in the tree) is not: its files are older than the
+# outer tree it lives in, so it would look stale and be deleted out of a live job.
+is_checkout_root() {
+  local parent
+  parent=$(dirname "$1")
+  while [ "$parent" != "$BUILDS" ] && [ "$parent" != "/" ] && [ -n "$parent" ]; do
+    [ -e "$parent/.git" ] && return 1
+    parent=$(dirname "$parent")
+  done
+  return 0
 }
 
 # The checkouts on the builds volume. /srv/builds is a real host path, so it
 # accumulates where the anonymous volume it replaced did not: one working tree per
-# runner token, per project. None of it is a Docker volume, so the loop below
-# never sees it. A checkout a job is using has files modified seconds ago, so a
-# tree untouched for the whole window is safe to drop; the next job clones it again.
+# runner token, per project. None of it is a Docker volume, so the volume loop
+# below never sees it. A checkout a job is using has files modified seconds ago,
+# so a tree untouched for the whole window is safe to drop; the next job clones it.
 #
 # The tree is $BUILDS/<runner token>/<slot>/<group>/<project>, and the number of
 # group levels depends on the namespace, so the working tree is found by the .git
 # it holds rather than at a fixed depth.
+#   $1 = keep going until used <= this many GB (default: the budget)
 prune_checkouts() {
   [ -d "$BUILDS" ] || return 0
+  local limit=${1:-$TARGET_USED_GB}
   local removed=0 gitdir d
-  for gitdir in $(find "$BUILDS" -mindepth 4 -maxdepth 9 -type d -name .git \
-      -not -path "$BUILDS/.tmp/*" 2>/dev/null); do
-    d=$(dirname "$gitdir")
-    [ -n "$(find "$d" -newermt "-${CHECKOUT_DAYS} days" -print -quit 2>/dev/null)" ] && continue
-    run rm -rf "$d"
-    removed=$((removed + 1))
-    over_budget || break
-  done
-  # The group folders the removed checkouts leave empty, never the token or slot
-  # folders a job may be about to use.
-  find "$BUILDS" -mindepth 3 -maxdepth 8 -type d -empty -not -path "$BUILDS/.tmp*" -delete 2>/dev/null || true
+  if above "$limit"; then
+    for gitdir in $(find "$BUILDS" -mindepth 4 -maxdepth 9 -type d -name .git \
+        -not -path "$BUILDS/.tmp/*" 2>/dev/null); do
+      d=$(dirname "$gitdir")
+      is_checkout_root "$d" || continue
+      [ -n "$(find "$d" -newermt "-${CHECKOUT_DAYS} days" -print -quit 2>/dev/null)" ] && continue
+      run rm -rf "$d"
+      removed=$((removed + 1))
+      above "$limit" || break
+    done
+    # The group folders the removed checkouts leave empty, never the token or slot
+    # folders a job may be about to use.
+    if [ "$removed" -gt 0 ] && [ "$DRY" != 1 ]; then
+      find "$BUILDS" -mindepth 3 -maxdepth 8 -type d -empty -not -path "$BUILDS/.tmp*" -delete 2>/dev/null || true
+    fi
+  fi
   echo "  stale checkouts removed: ${removed}"
 }
 
 # Cold Docker volumes, oldest first, re-checking the disk after each one: evicting
 # a volume nothing has mounted cannot disturb a running job, and stopping as soon
 # as the budget is met keeps the warmest entries.
+#   $1 = keep going until used <= this many GB (default: the budget)
 prune_cold_volumes() {
+  local limit=${1:-$TARGET_USED_GB}
   local live cold v mp window evicted=0
   live=$(docker ps -a -q 2>/dev/null | xargs -r docker inspect -f '{{range .Mounts}}{{.Name}}{{"\n"}}{{end}}' 2>/dev/null | sort -u)
   cold=$(mktemp)
@@ -158,7 +211,7 @@ prune_cold_volumes() {
   done
 
   if [ -s "$cold" ]; then
-    while over_budget && read -r _ v; do
+    while above "$limit" && read -r _ v; do
       run docker volume rm "$v"
       evicted=$((evicted + 1))
     done < <(sort -n "$cold")
@@ -167,19 +220,24 @@ prune_cold_volumes() {
   echo "cold volumes evicted: ${evicted} -> used=$(used_gb)G free=$(free_gb)G"
 }
 
-echo "used=$(used_gb)G free=$(free_gb)G pct=$(pct)% budget=${TARGET_USED_GB}G hard=${HARD_USED_GB}G running_jobs=$(jobs)"
+echo "used=$(used_gb)G free=$(free_gb)G of $(total_gb)G pct=$(pct)% budget=${TARGET_USED_GB}G hard=${HARD_USED_GB}G running_jobs=$(jobs)"
 
-# 1. Emergency: unattached resources only, so a live job is unaffected. A full
-# disk breaks the running job too. Container pruning keeps its age filter even
-# here: a container younger than the grace period may be a job that is still
-# starting, and deleting it turns a slow job into a failed one.
+# 1. Emergency: reclaim as much as possible, but take the entries that cannot be
+# in use first, and only fall back to images and the build cache if that was not
+# enough. Reclaiming to the floor rather than to the budget, so one emergency buys
+# real headroom instead of firing again on the next tick.
 if [ "$(pct)" -ge "$EMERGENCY" ]; then
-  echo "EMERGENCY: dropping every unused volume, image and build cache"
+  emergency_stop=$(( $(total_gb) - 2 * FLOOR_FREE_GB ))
+  echo "EMERGENCY at $(pct)%: reclaiming to ${emergency_stop}G from unattached entries only"
   prune_job_temp
   prune_containers
   run docker volume prune -af
-  run docker image prune -af
-  run docker builder prune -af
+  prune_checkouts "$emergency_stop"
+  if above "$emergency_stop"; then
+    echo "EMERGENCY: still at $(used_gb)G, dropping every unused image and the build cache"
+    run docker image prune -af
+    run docker builder prune -af
+  fi
   echo "usage_after=$(used_gb)G pct=$(pct)%"
   exit 0
 fi

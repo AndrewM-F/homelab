@@ -79,6 +79,9 @@ src/
 collector/
   homelab-collector.py    the collector (runs on the hypervisor)
   homelab-collector.service
+  ci-prune.sh             runner disk guard (runs on the gitlab LXC)
+  ci-prune.service
+  ci-prune.timer
 scripts/
   sync.ts                 inventory → .dev.vars, KV, Worker secrets, collector config
   tunnel.ts               inventory → tunnel ingress + DNS records
@@ -409,6 +412,29 @@ from the Worker — never ship them to the browser.
 2. `bun run sync && bun run tunnel apply --tunnel <id>`
 3. If the collector changed: re-copy `collector/config.json` and restart it.
 4. If the dashboard code changed: push to `main`; Cloudflare builds and deploys it.
+
+## The runner disk guard
+
+`collector/ci-prune.{sh,service,timer}` holds the whole disk on the `gitlab` LXC
+under a budget, on a one-minute timer. **The repo copy is the source of truth.**
+Deploy it by copying it over `/usr/local/sbin/ci-prune.sh` — editing the running
+container directly is what let the deployed script drift a version ahead of this
+repository for a day, and the drift reintroduced a bug that was already fixed.
+
+Two numbers carry the design, and both come from the host's own journal:
+`TARGET_USED_GB=38` is the lowest budget the box reaches, so the common path is
+one log line and an exit; the 22 GB it replaced was below the 24 GB floor of
+`/srv/mise` plus checkouts plus the OS, so every run escalated. The invariants
+that keep it from disturbing a job are documented at the top of the script —
+read them before changing a filter.
+
+```bash
+scp collector/ci-prune.sh root@<hypervisor>:/root/
+pct push <gitlab-vmid> /root/ci-prune.sh /usr/local/sbin/ci-prune.sh
+```
+
+Rehearse a change with `DRY_RUN=1 /usr/local/sbin/ci-prune.sh`, which prints every
+action it would take and performs none.
 
 ## What is deliberately not here
 
