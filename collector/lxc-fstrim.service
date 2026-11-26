@@ -1,0 +1,8 @@
+[Unit]
+Description=Trim the filesystems inside running LXC containers
+# No ordering and no ids: it trims whatever is running when it fires, and a trim
+# is housekeeping for the thin pool, not something anything waits on.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lxc-fstrim.sh

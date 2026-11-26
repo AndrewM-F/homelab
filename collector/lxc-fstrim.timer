@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly LXC filesystem trim
+
+[Timer]
+# Weekly is enough: a week of frees is far below the pool's headroom, and the
+# trim itself is cheap once it runs often enough to have little to do.
+OnCalendar=weekly
+Persistent=true
+# Spread it away from the top of the hour, where everything else already runs.
+RandomizedDelaySec=45m
+
+[Install]
+WantedBy=timers.target
