@@ -92,6 +92,12 @@ STALE_DAYS=${STALE_DAYS:-30}      # tagged images: only this old, and only past 
 CHECKOUT_DAYS=${CHECKOUT_DAYS:-7}
 CACHE_DAYS=${CACHE_DAYS:-14}
 JOB_TMP_MINUTES=${JOB_TMP_MINUTES:-1440}
+# Job temp folders a job put on the tmpfs instead of the builds volume
+# (ADEA_TMPFS_TMPDIR=1). These are RAM, and base.yml's after_script only removes the
+# builds-volume copy, so nothing else ever cleans them. Every job times out inside
+# 60 minutes, so a folder that has been quiet for six hours belongs to no live job.
+TMPFS_DIR=${TMPFS_DIR:-/srv/tmpfs}
+TMPFS_TMP_MINUTES=${TMPFS_TMP_MINUTES:-360}
 
 DRY=${DRY_RUN:-0}
 run() {
@@ -136,24 +142,31 @@ prune_images_if_idle() {
 
 # A job that replaces after_script never removes its own temp folder, and base.yml
 # names it by job id, so nothing ever reuses it. This is garbage whatever the disk
-# says, so it is collected first and unconditionally.
-prune_job_temp() {
-  [ -d "$BUILDS/.tmp" ] || return 0
+# says, so it is collected first and unconditionally. Two places hold such folders:
+# the builds volume (base.yml removes it in after_script unless a job overrides it)
+# and the tmpfs, which after_script never removes at all.
+prune_one_tmp_dir() {   # $1 = dir, $2 = quiet minutes
+  [ -d "$1" ] || return 0
   local stale=() d
-  for d in "$BUILDS/.tmp"/*/; do
+  for d in "$1"/*/; do
     [ -d "$d" ] || continue
     # Age on the newest content, never on the folder's own mtime: a job writing
     # into a subdirectory leaves the top-level mtime untouched and old.
-    [ -n "$(find "$d" -newermt "-${JOB_TMP_MINUTES} minutes" -print -quit 2>/dev/null)" ] && continue
+    [ -n "$(find "$d" -newermt "-$2 minutes" -print -quit 2>/dev/null)" ] && continue
     stale+=("$d")
   done
   [ "${#stale[@]}" -gt 0 ] || return 0
   if [ "$DRY" = 1 ]; then
-    echo "  would: remove ${#stale[@]} job temp folder(s) under $BUILDS/.tmp"
+    echo "  would: remove ${#stale[@]} job temp folder(s) under $1 (quiet $2m+)"
   else
     rm -rf "${stale[@]}"
-    echo "  job temp folders idle ${JOB_TMP_MINUTES}m+: ${#stale[@]}"
+    echo "  job temp folders under $1 quiet ${2}m+: ${#stale[@]}"
   fi
+}
+
+prune_job_temp() {
+  prune_one_tmp_dir "$BUILDS/.tmp" "$JOB_TMP_MINUTES"
+  prune_one_tmp_dir "$TMPFS_DIR" "$TMPFS_TMP_MINUTES"
 }
 
 # A checkout root is the working tree the runner clones. A .git deeper inside one

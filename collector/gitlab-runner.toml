@@ -30,6 +30,16 @@
 # so `mise install` re-downloads the toolchain for every job. Keep the two paths
 # absolute and separated by a colon.
 #
+# /srv/tmpfs is a bounded tmpfs (6 GiB, mode 1777) mounted into every job as
+# /tmp/adea-test. A job opts in with ADEA_TMPFS_TMPDIR=1 and puts its TMPDIR there;
+# base.yml guards it with a writable-directory check, so it is a no-op where the
+# path is absent. Without it the opt-in never fired on this host, and the dirs that
+# write temporary SQLite databases paid the builds volume for it: measured here at
+# 11 ms per fsync against 0.41 ms on tmpfs, 27x. control-plane:unit is the clearest
+# case -- 582 s of wall clock using 0.55 of its 2 CPU cores, so latency-bound, not
+# compute-bound. Bound the size: this host has no swap, and the cap turns a runaway
+# job into its own ENOSPC instead of an OOM for the whole runner.
+#
 # shm_size is a count of bytes, and it is /dev/shm for a Chromium in the job.
 # The 64 MiB default is far below what Playwright needs.
 concurrent = 7
@@ -59,7 +69,7 @@ log_level = "info"
     memory = "1g"
     pull_policy = ["if-not-present"]
     extra_hosts = ["host.docker.internal:host-gateway"]
-    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds", "/srv/tmpfs:/tmp/adea-test"]
     shm_size = 0
     tls_verify = false
 
@@ -79,7 +89,7 @@ log_level = "info"
     memory = "2g"
     pull_policy = ["if-not-present"]
     extra_hosts = ["host.docker.internal:host-gateway"]
-    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds", "/srv/tmpfs:/tmp/adea-test"]
     shm_size = 268435456
     tls_verify = false
 
@@ -98,7 +108,7 @@ log_level = "info"
     cpus = "2"
     memory = "4g"
     pull_policy = ["if-not-present"]
-    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds", "/srv/tmpfs:/tmp/adea-test"]
     extra_hosts = ["host.docker.internal:host-gateway"]
     shm_size = 536870912
     tls_verify = false
@@ -118,7 +128,7 @@ log_level = "info"
     cpus = "3"
     memory = "6g"
     pull_policy = ["if-not-present"]
-    volumes = ["/srv/mise:/mise", "/srv/builds:/builds"]
+    volumes = ["/srv/mise:/mise", "/srv/builds:/builds", "/srv/tmpfs:/tmp/adea-test"]
     extra_hosts = ["host.docker.internal:host-gateway"]
     shm_size = 536870912
     tls_verify = false
