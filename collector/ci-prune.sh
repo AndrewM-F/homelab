@@ -19,14 +19,24 @@
 #
 #   warm steady state        33-35 GB
 #   observed peak            40 GB   (85% of the then-48 GB disk)
-#   samples above 38 GB      2.3%    -> TARGET 38 acts on about one tick in forty
-#   samples above 34 GB      29%     -> TARGET 34 would act on one tick in three
+#   samples above 38 GB      2.3%    -> a 44 GB trigger acts on far fewer still
+#   samples above 34 GB      29%     -> a 34 GB trigger would act on one tick in three
 #
 # 38 is therefore the smallest budget that lets the common path be "one log line
-# and an exit". The disk is 64 GB, so 38 GB leaves ~25 GB free: room for a suite's
-# own scratch, an image pull, and a newly provisioned runner pool (~5 GB of fresh
-# checkouts, which is what the single +9 GB one-minute jump on 2026-11-26 00:00
-# turned out to be -- not image pulls).
+# and an exit". The disk is 64 GB, and above the natural footprint the trigger is
+# set by how much room the worst burst needs, not by the disk's total size:
+#
+#   natural footprint   33-35 GB  -> the budget must sit above this, or it never
+#                                    stops reclaiming and the cache never settles
+#   worst burst seen    +9 GB     (a newly provisioned runner pool -- ~5 GB of
+#                                  first-time checkouts plus tool caches, and zero
+#                                  image pulls in that window)
+#   emergency threshold 90% = 57 GB
+#
+# So the trigger sits above 35 GB and low enough that trigger + burst stays clear
+# of 57 GB. 44 GB: 19 GB free at rest, and the worst burst still leaves ~10 GB. At
+# 48 GB the burst would land on 57 GB and trip the emergency path -- the one path
+# allowed to drop images out from under a job.
 #
 # Order: job temp folders (always), then the checkouts on the builds volume, then
 # cold Docker volumes, then images and the build cache, then (only past the hard
@@ -63,9 +73,12 @@ set -u
 FS=/
 BUILDS=${BUILDS_DIR:-/srv/builds}
 # Start reclaiming above this, and stop as soon as we are back under it.
-TARGET_USED_GB=${TARGET_USED_GB:-38}
+TARGET_USED_GB=${TARGET_USED_GB:-44}
 # Past this, tagged images and the build cache go too, still cold-first.
-HARD_USED_GB=${HARD_USED_GB:-48}
+HARD_USED_GB=${HARD_USED_GB:-52}
+# An emergency reclaims below the budget, so it buys a quiet period instead of
+# firing again on the next tick.
+EMERGENCY_MARGIN_GB=${EMERGENCY_MARGIN_GB:-4}
 # Never finish below this much free, whatever the budget says.
 FLOOR_FREE_GB=${FLOOR_FREE_GB:-8}
 EMERGENCY=${EMERGENCY:-90}
@@ -227,7 +240,9 @@ echo "used=$(used_gb)G free=$(free_gb)G of $(total_gb)G pct=$(pct)% budget=${TAR
 # enough. Reclaiming to the floor rather than to the budget, so one emergency buys
 # real headroom instead of firing again on the next tick.
 if [ "$(pct)" -ge "$EMERGENCY" ]; then
-  emergency_stop=$(( $(total_gb) - 2 * FLOOR_FREE_GB ))
+  emergency_stop=$(( TARGET_USED_GB - EMERGENCY_MARGIN_GB ))
+  floor_stop=$(( $(total_gb) - 2 * FLOOR_FREE_GB ))
+  [ "$floor_stop" -lt "$emergency_stop" ] && emergency_stop=$floor_stop
   echo "EMERGENCY at $(pct)%: reclaiming to ${emergency_stop}G from unattached entries only"
   prune_job_temp
   prune_containers

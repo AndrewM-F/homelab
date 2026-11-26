@@ -82,6 +82,9 @@ collector/
   ci-prune.sh             runner disk guard (runs on the gitlab LXC)
   ci-prune.service
   ci-prune.timer
+  lxc-fstrim.sh           returns freed blocks to the thin pool (hypervisor)
+  lxc-fstrim.service
+  lxc-fstrim.timer
 scripts/
   sync.ts                 inventory → .dev.vars, KV, Worker secrets, collector config
   tunnel.ts               inventory → tunnel ingress + DNS records
@@ -421,12 +424,23 @@ Deploy it by copying it over `/usr/local/sbin/ci-prune.sh` — editing the runni
 container directly is what let the deployed script drift a version ahead of this
 repository for a day, and the drift reintroduced a bug that was already fixed.
 
-Two numbers carry the design, and both come from the host's own journal:
-`TARGET_USED_GB=38` is the lowest budget the box reaches, so the common path is
-one log line and an exit; the 22 GB it replaced was below the 24 GB floor of
-`/srv/mise` plus checkouts plus the OS, so every run escalated. The invariants
-that keep it from disturbing a job are documented at the top of the script —
-read them before changing a filter.
+Two numbers carry the design, and both come from the host's own journal. The
+budget is not "how full may the disk get": it is the level the guard pulls the
+cache down to, so it has to sit above the ~35 GB the box naturally keeps or it
+never stops reclaiming — the 22 GB it replaced was below the 24 GB floor of
+`/srv/mise` plus checkouts plus the OS, so every run escalated. `TARGET_USED_GB=44`
+leaves room for the worst burst seen (+9 GB, a newly provisioned runner pool)
+without reaching the 90 % emergency path. The invariants that keep it from
+disturbing a job are documented at the top of the script — read them before
+changing a filter.
+
+`lxc-fstrim.timer` is the other half. A container cannot trim its own rootfs:
+FITRIM needs privileges an unprivileged container does not have, so the
+`fstrim.timer` inside the image is enabled but can never fire, and freed blocks
+are never returned to the thin pool. The gitlab volume read 99.90 % allocated
+while the guest used half of it until this timer ran once and returned 29.9 GiB.
+Periodic trim from the host namespace, rather than mounting with `discard=on`: no
+container restart, and no TRIM on every `free()` across gigabyte checkouts.
 
 ```bash
 scp collector/ci-prune.sh root@<hypervisor>:/root/
