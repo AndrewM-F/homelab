@@ -62,6 +62,12 @@ runs. Names stay generic on purpose — addresses and VMIDs live only in
 | uptime | LXC | Uptime Kuma | LXC Containers |
 | secrets | LXC | Vaultwarden | LXC Containers |
 | gitlab | LXC | GitLab runners: Linux testing and qualification | LXC Containers |
+
+The runner's own config is versioned at `collector/gitlab-runner.toml` with the
+four runner tokens replaced by placeholders — paste the real ones in from GitLab
+before deploying. Validate with `gitlab-runner lint` before reloading; the
+deployed copy had drifted and carried an invalid top-level `request_concurrency`
+that nothing caught while no copy existed in git.
 | circleci | LXC | CircleCI runners: Linux release builds | LXC Containers |
 
 Both CI containers are unprivileged, run their own Docker daemon, and hold no
@@ -85,6 +91,7 @@ collector/
   lxc-fstrim.sh           returns freed blocks to the thin pool (hypervisor)
   lxc-fstrim.service
   lxc-fstrim.timer
+  gitlab-runner.toml      runner config (tokens are placeholders)
 scripts/
   sync.ts                 inventory → .dev.vars, KV, Worker secrets, collector config
   tunnel.ts               inventory → tunnel ingress + DNS records
