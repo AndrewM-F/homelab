@@ -94,10 +94,20 @@ CACHE_DAYS=${CACHE_DAYS:-14}
 JOB_TMP_MINUTES=${JOB_TMP_MINUTES:-1440}
 # Job temp folders a job put on the tmpfs instead of the builds volume
 # (ADEA_TMPFS_TMPDIR=1). These are RAM, and base.yml's after_script only removes the
-# builds-volume copy, so nothing else ever cleans them. Every job times out inside
-# 60 minutes, so a folder that has been quiet for six hours belongs to no live job.
+# builds-volume copy, so nothing else ever cleans them.
+#
+# 120 minutes, not the 60-minute job timeout alone: every job times out inside an
+# hour, so two hours cannot reach a live job, and the floor is what sets how much
+# piles up. The worst case is every medium job claiming a folder and none cleaning
+# up inline -- 1078 per 6 h at the 2.5 MB a job has been measured at:
+#
+#   360m floor   up to 2695 MB steady state   44% of the 6 GiB cap
+#   120m floor   up to  898 MB steady state   15% of the 6 GiB cap
+#
+# The cap turns a mistake into one job's ENOSPC rather than the runner's OOM, but
+# 44% of it sitting there for housekeeping is not something to leave to chance.
 TMPFS_DIR=${TMPFS_DIR:-/srv/tmpfs}
-TMPFS_TMP_MINUTES=${TMPFS_TMP_MINUTES:-360}
+TMPFS_TMP_MINUTES=${TMPFS_TMP_MINUTES:-120}
 
 DRY=${DRY_RUN:-0}
 run() {
