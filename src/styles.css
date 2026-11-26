@@ -752,8 +752,8 @@ a.machine:hover h3 {
   fill: var(--fg);
 }
 
-/* Page cache: resident but reclaimable, so it reads calm next to the main arc. */
-.gauge-cache {
+/* Secondary share (page cache, iowait): calmer than the main arc. */
+.gauge-inner {
   stroke: rgba(108, 119, 130, 0.9);
 }
 

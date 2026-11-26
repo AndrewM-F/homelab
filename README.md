@@ -212,11 +212,12 @@ an SSH check, a distant host) cannot drag a request past the dashboard's timeout
 
 #### CPU
 
-The hypervisor's CPU figure is `/proc/stat` busy time: idle, iowait and steal
-are subtracted, so a storage stall does not read as CPU work. Load average is a
-different measurement — it counts tasks in uninterruptible disk wait too — and
-stays in the card's tooltip alongside iowait, steal and Linux pressure stall
-information (PSI) for I/O.
+The hypervisor's CPU figure is `/proc/stat` busy time: idle, iowait and steal are
+subtracted, so a storage stall does not read as CPU work. The grey band is
+iowait + steal — time the CPU was idle but the system was waiting, or time a
+hypervisor took. Load average is a different measurement and cannot be stacked as
+ring time; it stays in the tooltip alongside iowait, steal and Linux pressure
+stall information (PSI) for I/O.
 
 #### Where disk numbers come from
 

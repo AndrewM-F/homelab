@@ -94,6 +94,16 @@ export function MachineCard(props: Props): JSX.Element {
     return usingPool() ? `${percent(poolCommittedFraction())} committed` : diskNote()
   }
 
+  const hostWait = () => Math.max(0, (props.host?.iowait ?? 0) + (props.host?.steal ?? 0))
+  const hostWaitInner = () => Math.min(1 - cpu(), hostWait())
+  const waitNote = () => {
+    const host = props.host
+    if (!host) return coreLabel()
+    const iowait = host.iowait ?? 0
+    const steal = host.steal ?? 0
+    return steal > 0 ? `${percent(iowait)} io · ${percent(steal)} steal` : `${percent(iowait)} iowait`
+  }
+
   const cpuTitle = () => {
     const host = props.host
     if (!host) return undefined
@@ -206,7 +216,7 @@ export function MachineCard(props: Props): JSX.Element {
                 label="cpu"
                 value={sampled() ? cpu() : 0}
                 display={sampled() ? percent(cpu()) : '—'}
-                note={sampled() ? coreLabel() : 'no data'}
+                note={sampled() ? waitNote() : 'no data'}
               />
               <Meter
                 label="mem"
@@ -240,9 +250,10 @@ export function MachineCard(props: Props): JSX.Element {
           <div class="gauges">
             <Gauge
               value={sampled() ? cpu() : 0}
+              inner={sampled() && props.host ? hostWaitInner() : 0}
               center={sampled() ? percent(cpu()) : '—'}
               label="cpu"
-              note={sampled() ? coreLabel() : 'no data'}
+              note={sampled() ? waitNote() : 'no data'}
               title={cpuTitle()}
             />
             <Gauge

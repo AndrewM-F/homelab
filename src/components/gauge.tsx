@@ -10,7 +10,7 @@ const ARC = Math.PI * RADIUS
 interface Props {
   /** 0..1 — the part that is really in use. */
   value: number
-  /** 0..1 — reclaimable page cache, drawn as an inner band after `value`. */
+  /** 0..1 — secondary band drawn after `value`, e.g. page cache or I/O wait. */
   inner?: number
   /** Text inside the arc, e.g. "29%". */
   center: string
@@ -27,10 +27,9 @@ interface Props {
 export function Gauge(props: Props): JSX.Element {
   const clamped = () => Math.min(1, Math.max(0, Number.isFinite(props.value) ? props.value : 0))
   const offset = () => ARC * (1 - clamped())
-  // The cache band sits just inside the main arc and starts where it ends, so the
-  // two together read as "resident", while the colour still follows real use.
-  // Drawn as a grey segment continuing along the same ring, so one arc carries
-  // both: real use in the severity colour, page cache in grey after it.
+  // The secondary band sits just inside the main arc and starts where it ends,
+  // so the two together read as the wider total while the colour still follows
+  // real use: real use in the severity colour, the secondary share in grey.
   const inner = () => Math.min(1 - clamped(), Math.max(0, Number.isFinite(props.inner ?? 0) ? (props.inner as number) : 0))
 
   return (
@@ -48,7 +47,7 @@ export function Gauge(props: Props): JSX.Element {
         />
         <Show when={inner() > 0.001}>
           <path
-            class="gauge-cache"
+            class="gauge-inner"
             d={`M ${CENTER - RADIUS} ${CENTER} A ${RADIUS} ${RADIUS} 0 0 1 ${CENTER + RADIUS} ${CENTER}`}
             fill="none"
             stroke-width={STROKE}
